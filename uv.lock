@@ -2,6 +2,13 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 
+[manifest]
+members = [
+    "job-terminal-models",
+    "pipeline",
+    "spider",
+]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.4"
@@ -185,6 +192,11 @@ wheels = [
 ]
 
 [[package]]
+name = "job-terminal-models"
+version = "0.0.0"
+source = { editable = "packages/job-terminal-models" }
+
+[[package]]
 name = "markdown-it-py"
 version = "4.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -280,6 +292,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/44/91/483de934193e12a3b1d6ae7c8645d083ff88dec75f46e827562f1e4b4da6/pandas-2.3.3-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:d051c0e065b94b7a3cea50eb1ec32e912cd96dba41647eb24104b6c6c14c5788", size = 12699963, upload-time = "2025-09-29T23:31:10.009Z" },
     { url = "https://files.pythonhosted.org/packages/70/44/5191d2e4026f86a2a109053e194d3ba7a31a2d10a9c2348368c63ed4e85a/pandas-2.3.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:3869faf4bd07b3b66a9f462417d0ca3a9df29a9f6abd5d0d0dbab15dac7abe87", size = 13202175, upload-time = "2025-09-29T23:31:59.173Z" },
 ]
+
+[[package]]
+name = "pipeline"
+version = "0.0.0"
+source = { virtual = "apps/pipeline" }
 
 [[package]]
 name = "psycopg2"
@@ -536,7 +553,7 @@ wheels = [
 [[package]]
 name = "spider"
 version = "0.0.0"
-source = { virtual = "." }
+source = { virtual = "apps/spider" }
 dependencies = [
     { name = "psycopg2" },
     { name = "python-dotenv" },

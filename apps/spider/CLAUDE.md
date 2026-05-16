@@ -1,0 +1,1 @@
+Always request explicit permission before running the spider, as it incurs significant costs.

@@ -6,7 +6,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.sql import text
 from sqlmodel import Session
 
-from models import Job
+from job_terminal_models import Job
 
 SOURCE_NAME = "linkedin"
 SNAPSHOT_PREFIX = "linkedin_"

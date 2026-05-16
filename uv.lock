@@ -195,6 +195,12 @@ wheels = [
 name = "job-terminal-models"
 version = "0.0.0"
 source = { editable = "packages/job-terminal-models" }
+dependencies = [
+    { name = "sqlmodel" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sqlmodel", specifier = ">=0.0.38" }]
 
 [[package]]
 name = "markdown-it-py"
@@ -555,6 +561,7 @@ name = "spider"
 version = "0.0.0"
 source = { virtual = "apps/spider" }
 dependencies = [
+    { name = "job-terminal-models" },
     { name = "psycopg2" },
     { name = "python-dotenv" },
     { name = "python-jobspy" },
@@ -564,6 +571,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "job-terminal-models", editable = "packages/job-terminal-models" },
     { name = "psycopg2", specifier = ">=2.9.12" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-jobspy", specifier = "==1.1.82" },

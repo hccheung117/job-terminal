@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "name": "job-terminal",
+      "path": "."
+    },
+    {
+      "name": "spider",
+      "path": "apps/spider"
+    }
+  ]
+}

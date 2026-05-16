@@ -1,13 +1,12 @@
 from collections import defaultdict
 
-from sqlalchemy.pool import NullPool
-from sqlmodel import Session, create_engine, select
+from sqlalchemy.engine import Engine
+from sqlmodel import Session, select
 
 from models import SpiderKeyword
 
 
-def load_groups(database_url: str) -> dict[str, list[str]]:
-    engine = create_engine(database_url, poolclass=NullPool)
+def load_groups(engine: Engine) -> dict[str, list[str]]:
     with Session(engine) as session:
         rows = session.exec(select(SpiderKeyword)).all()
 

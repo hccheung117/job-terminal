@@ -7,8 +7,12 @@ import jobspy_patch  # noqa: F401  # patches LinkedIn date_posted selector
 import typer
 from dotenv import load_dotenv
 from jobspy import scrape_jobs
+from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
+from sqlmodel import create_engine
 
-from service import load_groups
+from services.jobs import upload_snapshots
+from services.keywords import load_groups
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOTS_DIR = APP_ROOT.parents[1] / "data" / "snapshots"
@@ -30,6 +34,18 @@ def normalize_group_name(name: str) -> str:
     return slug or "group"
 
 
+def _build_engine() -> Engine:
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        typer.echo(
+            "DATABASE_URL is not set. Set it to a Supabase Postgres URL "
+            "using the postgresql+psycopg:// scheme.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    return create_engine(database_url, poolclass=NullPool)
+
+
 def run_group(group: str, keywords: list[str]) -> None:
     search_term = " OR ".join(keywords)
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,24 +56,17 @@ def run_group(group: str, keywords: list[str]) -> None:
     jobs.to_csv(output_path, quoting=csv.QUOTE_NONNUMERIC, escapechar="\\", index=False)
 
 
-@app.command()
-def main(
+@app.command("scrape")
+def scrape(
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
         help="Print the groups, keywords, and output paths that would be scraped, without calling the scraper.",
     ),
 ) -> None:
-    database_url = os.environ.get("DATABASE_URL")
-    if not database_url:
-        typer.echo(
-            "DATABASE_URL is not set. Set it to a Supabase Postgres URL "
-            "using the postgresql+psycopg:// scheme.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
+    engine = _build_engine()
 
-    groups = load_groups(database_url)
+    groups = load_groups(engine)
     if not groups:
         typer.echo("No keywords found in spider_keywords. Nothing to do.")
         raise typer.Exit(code=0)
@@ -89,6 +98,17 @@ def main(
     if failures:
         typer.echo(f"Failed groups: {', '.join(failures)}", err=True)
         raise typer.Exit(code=1)
+
+
+@app.command("upload")
+def upload() -> None:
+    engine = _build_engine()
+    counts = upload_snapshots(engine, SNAPSHOTS_DIR)
+    if not counts:
+        typer.echo("No snapshots found in data/snapshots/. Nothing to do.")
+        return
+    for group, n in counts.items():
+        typer.echo(f"{group}: {n} rows upserted")
 
 
 if __name__ == "__main__":

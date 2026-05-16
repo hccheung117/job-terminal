@@ -7,4 +7,5 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "python-jobspy==1.1.82",
     "sqlmodel>=0.0.38",
+    "typer>=0.25.1",
 ]

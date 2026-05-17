@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 
 from job_terminal_models import Decision, Job
 from models import User
+from steps import PIPELINE_STEPS
 
 
 @dataclass
@@ -25,23 +26,36 @@ class UserReport:
 def plan_report(engine: Engine) -> list[UserReport]:
     with Session(engine) as session:
         users = session.exec(select(User)).all()
-        jobs = session.exec(select(Job)).all()
-        rejected = set(
-            session.exec(
-                select(Decision.user_id, Decision.source_name, Decision.source_id).where(
-                    Decision.score == 0
-                )
-            ).all()
-        )
+        jobs = {(j.source_name, j.source_id): j for j in session.exec(select(Job)).all()}
+        decisions = session.exec(
+            select(
+                Decision.user_id,
+                Decision.source_name,
+                Decision.source_id,
+                Decision.step,
+                Decision.score,
+            )
+        ).all()
 
+    step_rank = {s: i for i, s in enumerate(PIPELINE_STEPS)}
+    seen_ranks = [step_rank[step] for _, _, _, step, _ in decisions if step in step_rank]
     reports = [
         UserReport(user_id=u.id, user_name=u.name, user_email=u.email) for u in users
     ]
+    if not seen_ranks:
+        return reports
+
+    target_step = PIPELINE_STEPS[max(seen_ranks)]
+    by_user: dict[UUID, list[Job]] = {}
+    for uid, source_name, source_id, step, score in decisions:
+        if step != target_step or score != 1:
+            continue
+        job = jobs.get((source_name, source_id))
+        if job is not None:
+            by_user.setdefault(uid, []).append(job)
+
     for report in reports:
-        for job in jobs:
-            if (report.user_id, job.source_name, job.source_id) in rejected:
-                continue
-            report.jobs.append(job)
+        report.jobs = by_user.get(report.user_id, [])
     return reports
 
 

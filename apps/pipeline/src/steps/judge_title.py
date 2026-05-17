@@ -12,9 +12,9 @@ from db import dialect_insert
 from job_terminal_models import Decision, Job
 from models import Criteria, User
 from paths import PROMPTS_DIR
+from steps.filter_title import STEP as TITLE_FILTER_STEP
 
 STEP = "title_judge"
-TITLE_FILTER_STEP = "title_filter"
 MODEL_NAME = "gemini-3.1-flash-lite-preview"
 
 PROMPT_TEMPLATE = (PROMPTS_DIR / "judge_title.md").read_text(encoding="utf-8")

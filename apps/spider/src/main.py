@@ -1,6 +1,5 @@
 import csv
 import os
-import re
 from pathlib import Path
 
 import jobspy_patch  # noqa: F401  # patches LinkedIn date_posted selector
@@ -29,11 +28,6 @@ SCRAPE_PARAMS: dict = {
 app = typer.Typer(add_completion=False, help="Scrape LinkedIn jobs by keyword group.")
 
 
-def normalize_group_name(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    return slug or "group"
-
-
 def _build_engine() -> Engine:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -49,7 +43,7 @@ def _build_engine() -> Engine:
 def run_group(group: str, keywords: list[str]) -> None:
     search_term = " OR ".join(keywords)
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = SNAPSHOTS_DIR / f"linkedin_{normalize_group_name(group)}.csv"
+    output_path = SNAPSHOTS_DIR / f"linkedin_{group}.csv"
     print(f"Running group '{group}' with search term: {search_term}")
     jobs = scrape_jobs(search_term=search_term, **SCRAPE_PARAMS)
     print(f"Found {len(jobs)} jobs for group '{group}'")
@@ -101,14 +95,23 @@ def scrape(
 
 
 @app.command("upload")
-def upload() -> None:
+def upload(
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Report the rows that would be upserted per snapshot, without writing to the database.",
+    ),
+) -> None:
     engine = _build_engine()
-    counts = upload_snapshots(engine, SNAPSHOTS_DIR)
+    groups = load_groups(engine)
+    counts = upload_snapshots(engine, SNAPSHOTS_DIR, groups, dry_run=dry_run)
     if not counts:
         typer.echo("No snapshots found in data/snapshots/. Nothing to do.")
         return
+    prefix = "[dry-run] " if dry_run else ""
+    verb = "would be upserted" if dry_run else "upserted"
     for group, n in counts.items():
-        typer.echo(f"{group}: {n} rows upserted")
+        typer.echo(f"{prefix}{group}: {n} rows {verb}")
 
 
 if __name__ == "__main__":

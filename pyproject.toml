@@ -1,2 +1,7 @@
 [tool.uv.workspace]
 members = ["apps/*", "packages/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

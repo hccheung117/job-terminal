@@ -1,11 +1,9 @@
-from pathlib import Path
-
 import typer
 from dotenv import load_dotenv
 
-APP_ROOT = Path(__file__).resolve().parents[1]
+from paths import ENV_FILE
 
-load_dotenv(APP_ROOT / ".env")
+load_dotenv(ENV_FILE)
 
 from commands.report import report as report_command  # noqa: E402
 from commands.title import app as title_app  # noqa: E402

@@ -1,7 +1,6 @@
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -12,12 +11,12 @@ from sqlmodel import Session, select
 from db import dialect_insert
 from job_terminal_models import Decision, Job
 from models import Criteria, User
+from paths import PROMPTS_DIR
 
 STEP = "title_judge"
 TITLE_FILTER_STEP = "title_filter"
 MODEL_NAME = "gemini-3.1-flash-lite-preview"
 
-PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 PROMPT_TEMPLATE = (PROMPTS_DIR / "judge_title.md").read_text(encoding="utf-8")
 
 

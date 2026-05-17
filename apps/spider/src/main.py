@@ -8,6 +8,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import create_engine
 
+from services.enrich import execute_enrich_plan, plan_enrich, render_enrich_plan
 from services.jobs import (
     execute_upload_plan,
     plan_upload_snapshots,
@@ -73,6 +74,26 @@ def scrape(
         failed_groups = ", ".join(group for group, _ in failures)
         typer.echo(f"Failed groups: {failed_groups}", err=True)
         raise typer.Exit(code=1)
+
+
+@app.command("enrich")
+def enrich(
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Report how many survivors would have JDs fetched, without calling LinkedIn.",
+    ),
+) -> None:
+    engine = _build_engine()
+    plan = plan_enrich(engine)
+
+    if dry_run:
+        render_enrich_plan(plan)
+        typer.echo(f"[dry-run] {len(plan.survivor_ids)} JDs would be fetched")
+        return
+
+    fetched = execute_enrich_plan(engine, plan)
+    typer.echo(f"{fetched} JDs fetched")
 
 
 @app.command("upload")

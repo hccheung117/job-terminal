@@ -8,8 +8,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
-from job_terminal_models import Job
-from models import Decision, Stopword, User
+from job_terminal_models import Decision, Job
+from models import Stopword, User
 
 STEP = "title_filter"
 

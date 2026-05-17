@@ -1,4 +1,3 @@
-import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,6 +10,7 @@ from sqlalchemy.sql import text
 from sqlmodel import Session
 
 from job_terminal_models import Job
+from services.title_filter import split_by_title, title_pattern
 
 SOURCE_NAME = "linkedin"
 SNAPSHOT_PREFIX = "linkedin_"
@@ -41,13 +41,6 @@ def _parse_published_at(raw: str | None) -> datetime | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
-
-
-def _title_pattern(keywords: list[str]) -> str | None:
-    parts = [re.escape(k.strip()) for k in keywords if k and k.strip()]
-    if not parts:
-        return None
-    return r"\b(?:" + "|".join(parts) + r")\b"
 
 
 def _row_to_job(row: dict[str, str], group: str) -> dict | None:
@@ -94,7 +87,7 @@ def plan_upload_snapshots(
             )
             continue
 
-        pattern = _title_pattern(keywords)
+        pattern = title_pattern(keywords)
         if pattern is None:
             plans.append(
                 UploadSnapshotPlan(
@@ -109,10 +102,7 @@ def plan_upload_snapshots(
             continue
 
         df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
-        matched = df["title"].str.contains(pattern, case=False, regex=True, na=False)
-        kept_titles = df.loc[matched, "title"].tolist()
-        dropped_titles = df.loc[~matched, "title"].tolist()
-        df = df[matched]
+        df, kept_titles, dropped_titles = split_by_title(df, pattern)
 
         records = [_row_to_job(row, group) for row in df.to_dict("records")]
         records = [r for r in records if r is not None]

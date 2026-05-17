@@ -1,3 +1,3 @@
-from job_terminal_models.models import Job
+from job_terminal_models.models import Decision, Job
 
-__all__ = ["Job"]
+__all__ = ["Decision", "Job"]

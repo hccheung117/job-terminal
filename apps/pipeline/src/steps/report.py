@@ -10,8 +10,8 @@ from rich.markdown import Markdown
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
-from job_terminal_models import Job
-from models import Decision, User
+from job_terminal_models import Decision, Job
+from models import User
 
 
 @dataclass

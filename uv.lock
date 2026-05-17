@@ -303,6 +303,16 @@ wheels = [
 name = "pipeline"
 version = "0.0.0"
 source = { virtual = "apps/pipeline" }
+dependencies = [
+    { name = "job-terminal-models" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "job-terminal-models", editable = "packages/job-terminal-models" },
+    { name = "typer", specifier = ">=0.25.1" },
+]
 
 [[package]]
 name = "psycopg2"

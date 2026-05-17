@@ -1,9 +1,11 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, ForeignKeyConstraint, String
+from sqlalchemy import JSON, Column, DateTime, ForeignKeyConstraint, String
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Field, SQLModel
+
+_GROUPS_TYPE = ARRAY(String).with_variant(JSON(), "sqlite")
 
 
 class Job(SQLModel, table=True):
@@ -12,7 +14,7 @@ class Job(SQLModel, table=True):
     source_id: str = Field(primary_key=True)
     groups: list[str] = Field(
         default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
+        sa_column=Column(_GROUPS_TYPE, nullable=False, server_default="{}"),
     )
     location: str | None = None
     title: str | None = None

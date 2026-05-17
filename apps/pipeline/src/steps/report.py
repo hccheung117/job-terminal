@@ -26,9 +26,11 @@ def plan_report(engine: Engine) -> list[UserReport]:
     with Session(engine) as session:
         users = session.exec(select(User)).all()
         jobs = session.exec(select(Job)).all()
-        decided = set(
+        rejected = set(
             session.exec(
-                select(Decision.user_id, Decision.source_name, Decision.source_id)
+                select(Decision.user_id, Decision.source_name, Decision.source_id).where(
+                    Decision.score == 0
+                )
             ).all()
         )
 
@@ -37,7 +39,7 @@ def plan_report(engine: Engine) -> list[UserReport]:
     ]
     for report in reports:
         for job in jobs:
-            if (report.user_id, job.source_name, job.source_id) in decided:
+            if (report.user_id, job.source_name, job.source_id) in rejected:
                 continue
             report.jobs.append(job)
     return reports

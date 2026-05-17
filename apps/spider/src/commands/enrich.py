@@ -17,48 +17,37 @@ TITLE_STEP = "title_filter"
 @dataclass
 class EnrichPlan:
     survivor_ids: list[str]
-    skipped_rejected_count: int
 
 
 def _build_plan(engine: Engine) -> EnrichPlan:
     """Find jobs that need JD fetched.
 
-    Survivor = jobs.jd IS NULL AND not commonly-rejected at title_filter step.
-    Commonly-rejected = every user has a rejection (score <= 0) decision at title_filter
-    for this job. A user with no decision yet keeps the job alive.
+    Survivor = jobs.jd IS NULL AND at least one user passed title_filter
+    (score=1) for this job.
     """
     sql = text(
-        "WITH rejected AS ("
-        "  SELECT d.source_id FROM decisions d "
-        "  WHERE d.source_name = :source_name "
-        "    AND d.step = :step "
-        "    AND d.score <= 0 "
-        "  GROUP BY d.source_id "
-        "  HAVING COUNT(DISTINCT d.user_id) = (SELECT COUNT(*) FROM users)"
-        ") "
-        "SELECT j.source_id, j.source_id IN (SELECT source_id FROM rejected) AS rejected "
-        "FROM jobs j "
-        "WHERE j.source_name = :source_name AND j.jd IS NULL"
+        "SELECT j.source_id FROM jobs j "
+        "WHERE j.source_name = :source_name AND j.jd IS NULL "
+        "  AND EXISTS ("
+        "    SELECT 1 FROM decisions d "
+        "    WHERE d.source_name = j.source_name "
+        "      AND d.source_id = j.source_id "
+        "      AND d.step = :step "
+        "      AND d.score = 1"
+        "  )"
     )
-    survivor_ids: list[str] = []
-    skipped = 0
     with Session(engine) as session:
-        for source_id, rejected in session.exec(
-            sql.bindparams(source_name=SOURCE_NAME, step=TITLE_STEP)
-        ):
-            if rejected:
-                skipped += 1
-            else:
-                survivor_ids.append(source_id)
-    return EnrichPlan(survivor_ids=survivor_ids, skipped_rejected_count=skipped)
+        survivor_ids = [
+            row[0]
+            for row in session.exec(
+                sql.bindparams(source_name=SOURCE_NAME, step=TITLE_STEP)
+            )
+        ]
+    return EnrichPlan(survivor_ids=survivor_ids)
 
 
 def _render_plan(plan: EnrichPlan) -> None:
-    print(
-        f"survivors to fetch: {len(plan.survivor_ids)} | "
-        f"skipped (commonly rejected at {TITLE_STEP}): {plan.skipped_rejected_count}",
-        file=sys.stderr,
-    )
+    print(f"survivors to fetch: {len(plan.survivor_ids)}", file=sys.stderr)
 
 
 def _execute_plan(engine: Engine, plan: EnrichPlan) -> int:

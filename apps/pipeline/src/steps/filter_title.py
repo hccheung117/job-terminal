@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
+from db import dialect_insert
 from job_terminal_models import Decision, Job
 from models import Stopword, User
 
@@ -22,9 +22,10 @@ class FilterTitlePlan:
     source_name: str
     source_id: str
     title: str
-    matched_keyword: str
-    scope_type: str
-    scope_id: str
+    score: int
+    matched_keyword: str | None = None
+    scope_type: str | None = None
+    scope_id: str | None = None
 
 
 def _compile_pattern(keywords: list[str]) -> re.Pattern[str] | None:
@@ -83,11 +84,12 @@ def plan_filter_title(engine: Engine) -> list[FilterTitlePlan]:
                 group_hit = (m.group(0).lower(), group)
                 break
 
-        if group_hit:
-            kw, group = group_hit
-            for user in users:
-                if (user.id, job.source_name, job.source_id) in decided:
-                    continue
+        for user in users:
+            if (user.id, job.source_name, job.source_id) in decided:
+                continue
+
+            if group_hit:
+                kw, group = group_hit
                 plans.append(
                     FilterTitlePlan(
                         user_id=user.id,
@@ -96,19 +98,17 @@ def plan_filter_title(engine: Engine) -> list[FilterTitlePlan]:
                         source_name=job.source_name,
                         source_id=job.source_id,
                         title=title,
+                        score=0,
                         matched_keyword=kw,
                         scope_type="group",
                         scope_id=group,
                     )
                 )
-            continue
-
-        # User pass: a match rejects the job only for that user.
-        for user in users:
-            if (user.id, job.source_name, job.source_id) in decided:
                 continue
-            pattern = user_patterns.get(user.id)
-            if pattern and (m := pattern.search(title)):
+
+            user_pattern = user_patterns.get(user.id)
+            user_match = user_pattern.search(title) if user_pattern else None
+            if user_match:
                 plans.append(
                     FilterTitlePlan(
                         user_id=user.id,
@@ -117,11 +117,25 @@ def plan_filter_title(engine: Engine) -> list[FilterTitlePlan]:
                         source_name=job.source_name,
                         source_id=job.source_id,
                         title=title,
-                        matched_keyword=m.group(0).lower(),
+                        score=0,
+                        matched_keyword=user_match.group(0).lower(),
                         scope_type="user",
                         scope_id=str(user.id),
                     )
                 )
+                continue
+
+            plans.append(
+                FilterTitlePlan(
+                    user_id=user.id,
+                    user_name=user.name,
+                    user_email=user.email,
+                    source_name=job.source_name,
+                    source_id=job.source_id,
+                    title=title,
+                    score=1,
+                )
+            )
 
     return plans
 
@@ -137,13 +151,14 @@ def execute_filter_title_plan(engine: Engine, plans: list[FilterTitlePlan]) -> i
             "source_name": p.source_name,
             "source_id": p.source_id,
             "step": STEP,
-            "score": 0,
-            "reason": f"stopword: {p.matched_keyword}",
+            "score": p.score,
+            "reason": f"stopword: {p.matched_keyword}" if p.score == 0 else None,
             "judged_at": judged_at,
         }
         for p in plans
     ]
 
+    insert = dialect_insert(engine)
     stmt = insert(Decision).values(rows).on_conflict_do_nothing(
         index_elements=["user_id", "source_name", "source_id", "step"],
     )
@@ -162,9 +177,11 @@ def render_filter_title_plan(plans: list[FilterTitlePlan]) -> None:
 
     for user_plans in by_user.values():
         head = user_plans[0]
+        rejects = [p for p in user_plans if p.score == 0]
+        passes = [p for p in user_plans if p.score == 1]
         print(f"\n{head.user_name} ({head.user_email})", file=sys.stderr)
-        print(f"  rejections: {len(user_plans)}", file=sys.stderr)
-        for p in user_plans:
+        print(f"  passes: {len(passes)}  rejections: {len(rejects)}", file=sys.stderr)
+        for p in rejects:
             print(
                 f"  - {p.source_name}/{p.source_id}  "
                 f"[{p.scope_type}:{p.scope_id} -> {p.matched_keyword!r}]  "

@@ -68,7 +68,7 @@ def scrape(
 
     groups = load_groups(engine)
     if not groups:
-        typer.echo("No keywords found in spider_keywords. Nothing to do.")
+        typer.echo("No keywords found in keywords. Nothing to do.")
         raise typer.Exit(code=0)
 
     if dry_run:

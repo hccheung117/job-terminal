@@ -1,4 +1,6 @@
-from sqlalchemy import Column, String
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, String
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Field, SQLModel
 
@@ -20,5 +22,11 @@ class Job(SQLModel, table=True):
     reqs_soft: str | None = None
     role: str | None = None
     unlisted: int = 0
-    published_at: str | None = None
-    first_seen_at: str | None = None
+    published_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    first_seen_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )

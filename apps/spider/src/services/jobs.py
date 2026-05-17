@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy.dialects.postgresql import insert
@@ -16,6 +17,18 @@ def _group_from_filename(path: Path) -> str:
     return path.stem[len(SNAPSHOT_PREFIX):]
 
 
+def _parse_published_at(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _row_to_job(row: dict[str, str], group: str) -> dict | None:
     source_id = (row.get("id") or "").strip()
     if not source_id:
@@ -28,7 +41,7 @@ def _row_to_job(row: dict[str, str], group: str) -> dict | None:
         "title": row.get("title") or None,
         "jd": row.get("description") or None,
         "url": row.get("job_url") or row.get("url") or None,
-        "published_at": row.get("date_posted") or None,
+        "published_at": _parse_published_at(row.get("date_posted")),
     }
 
 

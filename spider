@@ -2,4 +2,4 @@
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR/apps/spider"
-exec uv run python src/main.py "$@"
+exec uv run python src/cli.py "$@"

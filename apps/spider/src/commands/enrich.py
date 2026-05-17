@@ -1,17 +1,17 @@
-import random
 import sys
-import time
 from dataclasses import dataclass
 
-from jobspy.linkedin import LinkedIn
-from jobspy.model import DescriptionFormat, ScraperInput, Site
+import typer
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import text
 from sqlmodel import Session
 
+from db import build_engine
+from services.linkedin import build_scraper, fetch_jd, polite_sleep
+from services.jobs import update_jd
+
 SOURCE_NAME = "linkedin"
 TITLE_STEP = "title_filter"
-LINKEDIN_ID_PREFIX = "li-"
 
 
 @dataclass
@@ -20,7 +20,7 @@ class EnrichPlan:
     skipped_rejected_count: int
 
 
-def plan_enrich(engine: Engine) -> EnrichPlan:
+def _build_plan(engine: Engine) -> EnrichPlan:
     """Find jobs that need JD fetched.
 
     Survivor = jobs.jd IS NULL AND not commonly-rejected at title_filter step.
@@ -53,7 +53,7 @@ def plan_enrich(engine: Engine) -> EnrichPlan:
     return EnrichPlan(survivor_ids=survivor_ids, skipped_rejected_count=skipped)
 
 
-def render_enrich_plan(plan: EnrichPlan) -> None:
+def _render_plan(plan: EnrichPlan) -> None:
     print(
         f"survivors to fetch: {len(plan.survivor_ids)} | "
         f"skipped (commonly rejected at {TITLE_STEP}): {plan.skipped_rejected_count}",
@@ -61,36 +61,35 @@ def render_enrich_plan(plan: EnrichPlan) -> None:
     )
 
 
-def execute_enrich_plan(engine: Engine, plan: EnrichPlan) -> int:
+def _execute_plan(engine: Engine, plan: EnrichPlan) -> int:
     if not plan.survivor_ids:
         return 0
 
-    scraper = LinkedIn()
-    scraper.scraper_input = ScraperInput(
-        site_type=[Site.LINKEDIN],
-        description_format=DescriptionFormat.MARKDOWN,
-    )
-
-    update_sql = text(
-        "UPDATE jobs SET jd = :jd "
-        "WHERE source_name = :source_name AND source_id = :source_id"
-    )
-
+    scraper = build_scraper()
     fetched = 0
-    with Session(engine) as session:
-        for source_id in plan.survivor_ids:
-            job_id = source_id.removeprefix(LINKEDIN_ID_PREFIX)
-            details = scraper._get_job_details(job_id)
-            description = details.get("description")
-            if not description:
-                time.sleep(scraper.delay + random.uniform(0, scraper.band_delay))
-                continue
-            session.exec(update_sql.bindparams(
-                jd=description,
-                source_name=SOURCE_NAME,
-                source_id=source_id,
-            ))
-            session.commit()
+    for source_id in plan.survivor_ids:
+        jd = fetch_jd(scraper, source_id)
+        if jd:
+            update_jd(engine, source_id, jd)
             fetched += 1
-            time.sleep(scraper.delay + random.uniform(0, scraper.band_delay))
+        polite_sleep(scraper)
     return fetched
+
+
+def enrich(
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Report how many survivors would have JDs fetched, without calling LinkedIn.",
+    ),
+) -> None:
+    engine = build_engine()
+    plan = _build_plan(engine)
+
+    if dry_run:
+        _render_plan(plan)
+        typer.echo(f"[dry-run] {len(plan.survivor_ids)} JDs would be fetched")
+        return
+
+    fetched = _execute_plan(engine, plan)
+    typer.echo(f"{fetched} JDs fetched")

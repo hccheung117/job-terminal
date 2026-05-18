@@ -30,7 +30,7 @@ def report(
     result = execute_report_plan(engine, reports)
     for failure in result.failures:
         typer.echo(
-            f"Failed to send batch {failure.batch_index}: {failure.message}",
+            f"Failed to send report for user {failure.user_id}: {failure.message}",
             err=True,
         )
     typer.echo(f"{result.sent} report(s) sent")

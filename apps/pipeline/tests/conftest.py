@@ -6,7 +6,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
 from job_terminal_models import Decision, Job  # noqa: F401  (register tables)
-from models import Criteria, Stopword, User  # noqa: F401  (register tables)
+from models import Criteria, ReportSend, Stopword, User  # noqa: F401  (register tables)
 
 
 @pytest.fixture()
@@ -60,6 +60,7 @@ def add_decision(
     step: str,
     score: int,
     reason: str | None = None,
+    judged_at: datetime | None = None,
 ) -> None:
     session.add(
         Decision(
@@ -69,7 +70,23 @@ def add_decision(
             step=step,
             score=score,
             reason=reason,
-            judged_at=datetime(2026, 5, 17, tzinfo=timezone.utc),
+            judged_at=judged_at or datetime(2026, 5, 17, tzinfo=timezone.utc),
+        )
+    )
+    session.commit()
+
+
+def add_report_send(
+    session: Session,
+    user_id: UUID,
+    cutoff_at: datetime,
+    sent_at: datetime | None = None,
+) -> None:
+    session.add(
+        ReportSend(
+            user_id=user_id,
+            cutoff_at=cutoff_at,
+            sent_at=sent_at or cutoff_at,
         )
     )
     session.commit()

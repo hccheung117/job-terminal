@@ -1,7 +1,23 @@
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKeyConstraint
+from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field, SQLModel
+
+
+class TZDateTime(TypeDecorator):
+    """DateTime column that always returns tz-aware UTC datetimes."""
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class User(SQLModel, table=True):
@@ -34,3 +50,18 @@ class Stopword(SQLModel, table=True):
     scope_type: str = Field(primary_key=True)
     scope_id: str = Field(primary_key=True)
     keyword: str = Field(primary_key=True)
+
+
+class ReportSend(SQLModel, table=True):
+    __tablename__ = "report_sends"
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id"], ["users.id"]),
+    )
+
+    user_id: UUID = Field(primary_key=True)
+    cutoff_at: datetime = Field(
+        sa_column=Column(TZDateTime(timezone=True), primary_key=True, nullable=False),
+    )
+    sent_at: datetime = Field(
+        sa_column=Column(TZDateTime(timezone=True), nullable=False),
+    )

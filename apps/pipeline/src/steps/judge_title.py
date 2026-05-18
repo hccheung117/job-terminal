@@ -1,4 +1,3 @@
-import sys
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -149,17 +148,19 @@ def execute_judge_title_plan(
         yield result
 
 
-def render_judge_title_plan(plans: list[JudgeTitlePlan]) -> None:
+def render_judge_title_plan(plans: list[JudgeTitlePlan]) -> str:
+    lines: list[str] = []
     by_user: dict[UUID, list[JudgeTitlePlan]] = {}
     for p in plans:
         by_user.setdefault(p.user_id, []).append(p)
 
     for user_plans in by_user.values():
         head = user_plans[0]
-        print(f"\n{head.user_name} ({head.user_email})", file=sys.stderr)
-        print(f"  to judge: {len(user_plans)}", file=sys.stderr)
+        lines.append(f"\n{head.user_name} ({head.user_email})")
+        lines.append(f"  to judge: {len(user_plans)}")
         for p in user_plans:
-            print(f"  - {p.source_name}/{p.source_id}  {p.title}", file=sys.stderr)
+            lines.append(f"  - {p.source_name}/{p.source_id}  {p.title}")
+    return "\n".join(lines)
 
 
 def plan_judge_title_eval(engine: Engine) -> list[JudgeTitleEvalUser]:
@@ -214,17 +215,20 @@ def plan_judge_title_eval(engine: Engine) -> list[JudgeTitleEvalUser]:
     return result
 
 
-def render_judge_title_eval(users: list[JudgeTitleEvalUser]) -> None:
-    from rich.console import Console
-    from rich.markdown import Markdown
-
-    console = Console()
+def render_judge_title_eval(users: list[JudgeTitleEvalUser]) -> str:
+    sections: list[str] = []
     for user in users:
-        header = f"# {user.user_name} ({user.user_email})\n\n{user.criteria}"
-        console.print(Markdown(header))
+        lines = [
+            f"# {user.user_name} ({user.user_email})",
+            "",
+            user.criteria,
+        ]
         if not user.entries:
-            print("- _no past judgments_")
+            lines.append("- _no past judgments_")
         for entry in user.entries:
             verdict = "pass" if entry.passes else f"reject: {entry.reason}"
-            print(f"- {entry.source_name}/{entry.source_id}  {entry.title} — {verdict}")
-        print()
+            lines.append(
+                f"- {entry.source_name}/{entry.source_id}  {entry.title} — {verdict}"
+            )
+        sections.append("\n".join(lines))
+    return "\n\n".join(sections)

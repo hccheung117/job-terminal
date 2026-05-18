@@ -27,18 +27,24 @@ def filter(
 ) -> None:
     """Audit jobs against stopwords and write title_filter pass/reject decisions."""
     engine = build_engine()
-    plans = plan_filter_title(engine)
+    output = plan_filter_title(engine)
+    plans = output.plans
+
+    for warning in output.warnings:
+        typer.echo(f"warning: {warning}", err=True)
 
     if not plans:
         typer.echo("No new title_filter decisions to write. Nothing to do.")
         return
 
+    report = render_filter_title_plan(plans)
+    if report:
+        typer.echo(report, err=True)
+
     if dry_run:
-        render_filter_title_plan(plans)
         typer.echo(f"[dry-run] {len(plans)} title_filter decision(s) would be written")
         return
 
-    render_filter_title_plan(plans)
     written = execute_filter_title_plan(engine, plans)
     typer.echo(f"{written} title_filter decision(s) written")
 
@@ -59,7 +65,9 @@ def judge(
         typer.echo("No new title_judge candidates. Nothing to do.")
         return
 
-    render_judge_title_plan(plans)
+    report = render_judge_title_plan(plans)
+    if report:
+        typer.echo(report, err=True)
 
     if dry_run:
         typer.echo(f"[dry-run] {len(plans)} title_judge pair(s) would be judged")

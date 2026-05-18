@@ -5,8 +5,6 @@ from uuid import UUID
 
 import resend
 from markdown_it import MarkdownIt
-from rich.console import Console
-from rich.markdown import Markdown
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
@@ -21,6 +19,18 @@ class UserReport:
     user_name: str
     user_email: str
     jobs: list[Job] = field(default_factory=list)
+
+
+@dataclass
+class ReportSendFailure:
+    batch_index: int
+    message: str
+
+
+@dataclass
+class ReportSendResult:
+    sent: int
+    failures: list[ReportSendFailure]
 
 
 def plan_report(engine: Engine) -> list[UserReport]:
@@ -100,14 +110,12 @@ def _report_markdown(report: UserReport, now: datetime) -> str:
     return "\n".join(lines)
 
 
-def render_report_preview(reports: list[UserReport]) -> None:
+def render_report_preview(reports: list[UserReport]) -> str:
     now = datetime.now(timezone.utc)
-    console = Console()
-    for report in reports:
-        console.print(Markdown(_report_markdown(report, now)))
+    return "\n\n".join(_report_markdown(report, now) for report in reports)
 
 
-def execute_report_plan(engine: Engine, reports: list[UserReport]) -> int:
+def execute_report_plan(engine: Engine, reports: list[UserReport]) -> ReportSendResult:
     api_key = os.environ.get("RESEND_API_KEY")
     if not api_key:
         raise ValueError("RESEND_API_KEY is not set")
@@ -135,15 +143,16 @@ def execute_report_plan(engine: Engine, reports: list[UserReport]) -> int:
         )
 
     sent = 0
+    failures: list[ReportSendFailure] = []
     # Resend batch API supports up to 100 emails per request
     batch_size = 100
     for i in range(0, len(params), batch_size):
         batch = params[i:i + batch_size]
+        batch_index = i // batch_size
         try:
             resend.Batch.send(batch)
             sent += len(batch)
-        except Exception as e:
-            # Handle or log the error appropriately for production
-            print(f"Failed to send batch {i//batch_size}: {e}")
+        except Exception as exc:
+            failures.append(ReportSendFailure(batch_index=batch_index, message=str(exc)))
 
-    return sent
+    return ReportSendResult(sent=sent, failures=failures)

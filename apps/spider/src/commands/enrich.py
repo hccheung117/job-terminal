@@ -1,4 +1,3 @@
-import sys
 from dataclasses import dataclass
 
 import typer
@@ -7,8 +6,8 @@ from sqlalchemy.sql import text
 from sqlmodel import Session
 
 from db import build_engine
-from services.linkedin import build_scraper, fetch_jd, polite_sleep
 from services.jobs import update_jd
+from services.linkedin import build_scraper, fetch_jd, polite_sleep
 
 SOURCE_NAME = "linkedin"
 TITLE_STEP = "title_filter"
@@ -46,8 +45,8 @@ def _build_plan(engine: Engine) -> EnrichPlan:
     return EnrichPlan(survivor_ids=survivor_ids)
 
 
-def _render_plan(plan: EnrichPlan) -> None:
-    print(f"survivors to fetch: {len(plan.survivor_ids)}", file=sys.stderr)
+def _render_plan(plan: EnrichPlan) -> str:
+    return f"survivors to fetch: {len(plan.survivor_ids)}"
 
 
 def _execute_plan(engine: Engine, plan: EnrichPlan) -> int:
@@ -76,7 +75,7 @@ def enrich(
     plan = _build_plan(engine)
 
     if dry_run:
-        _render_plan(plan)
+        typer.echo(_render_plan(plan), err=True)
         typer.echo(f"[dry-run] {len(plan.survivor_ids)} JDs would be fetched")
         return
 

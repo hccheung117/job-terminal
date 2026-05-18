@@ -1,4 +1,6 @@
 import typer
+from rich.console import Console
+from rich.markdown import Markdown
 
 from db import build_engine
 from steps.report import (
@@ -20,8 +22,17 @@ def report(
     reports = plan_report(engine)
 
     if preview:
-        render_report_preview(reports)
+        markdown = render_report_preview(reports)
+        if markdown:
+            Console().print(Markdown(markdown))
         return
 
-    sent = execute_report_plan(engine, reports)
-    typer.echo(f"{sent} report(s) sent")
+    result = execute_report_plan(engine, reports)
+    for failure in result.failures:
+        typer.echo(
+            f"Failed to send batch {failure.batch_index}: {failure.message}",
+            err=True,
+        )
+    typer.echo(f"{result.sent} report(s) sent")
+    if result.failures:
+        raise typer.Exit(code=1)

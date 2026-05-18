@@ -18,16 +18,16 @@ Instead of mixing business logic with side effects (like writing to a database, 
 
 ## How It Works
 
-Every command follows this lifecycle:
+Every command follows this lifecycle, with a strict separation between core logic and CLI output. **The CLI layer (`commands/*.py`) is the *only* place allowed to print to the terminal.**
 
 ### 1. The Planner (`build_*_plan` or `plan_*`)
 This function reads the current state (like reading from the database or parsing files) and returns a list of "Plan" objects (usually Python dataclasses). 
-* **Rule:** Planners are read-only. They never write data, make API calls, or commit database transactions.
+* **Rule:** Planners are read-only. They never write data, make API calls, commit database transactions, or print to the terminal.
 
 ### 2. The Reporter (`render_*_plan`)
-This function takes the Plan objects and formats them into a nice, human-readable string or prints them to the terminal.
-* **Rule:** Reporters only format text. They do not change state.
+This function takes the Plan objects and formats them into a nice, human-readable string.
+* **Rule:** Reporters only format and return text. They do not change state and **never** print to the terminal directly.
 
 ### 3. The Executor (`execute_*_plan`)
 This function takes the Plan objects and performs the actual side effects.
-* **Rule:** Executors are the *only* place where we write to the database, call external APIs, or create files. They should contain very little business logic.
+* **Rule:** Executors are the *only* place where we write to the database, call external APIs, or create files. They should contain very little business logic. They **never** print to the terminal. To report progress, executors should `yield` results back to the CLI layer.

@@ -1,7 +1,7 @@
 from sqlmodel import Session
 
 from conftest import add_decision, make_job, make_user
-from steps.report import plan_report
+from steps.report import plan_report, render_report_preview
 
 
 def test_report_uses_furthest_passed_step(engine):
@@ -58,3 +58,16 @@ def test_report_empty_when_user_has_no_decisions(engine):
 
     reports = plan_report(engine)
     assert reports[0].jobs == []
+
+
+def test_render_report_preview_returns_markdown(engine):
+    with Session(engine) as session:
+        user = make_user(session)
+        job = make_job(session, "1", "Senior Python Engineer")
+        add_decision(session, user.id, job, "title_filter", score=1)
+
+    reports = plan_report(engine)
+    markdown = render_report_preview(reports)
+
+    assert "Jobs for Alice" in markdown
+    assert "Senior Python Engineer" in markdown

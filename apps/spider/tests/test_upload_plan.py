@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from services.jobs import plan_upload_snapshots, render_upload_plan, upload_counts
+from commands.upload import _build_plan, _plan_counts, _render_plan
 
 SNAPSHOT_HEADER = "id,title,location,description,job_url,date_posted\n"
 
@@ -25,7 +25,7 @@ def test_plan_upload_snapshots_filters_titles(tmp_path: Path) -> None:
     )
     groups = {"backend": ["python"]}
 
-    plans = plan_upload_snapshots(snapshots_dir, groups)
+    plans = _build_plan(snapshots_dir, groups)
 
     assert len(plans) == 1
     plan = plans[0]
@@ -52,12 +52,12 @@ def test_plan_upload_snapshots_skips_unknown_group_with_warning(
     )
     groups: dict[str, list[str]] = {}
 
-    plans = plan_upload_snapshots(snapshots_dir, groups)
+    plans = _build_plan(snapshots_dir, groups)
 
     assert len(plans) == 1
     assert plans[0].warning is not None
     assert plans[0].records == []
-    assert upload_counts(plans) == {"unknown": 0}
+    assert _plan_counts(plans) == {"unknown": 0}
 
 
 def test_plan_upload_snapshots_skips_empty_and_missing_dir(tmp_path: Path) -> None:
@@ -66,25 +66,24 @@ def test_plan_upload_snapshots_skips_empty_and_missing_dir(tmp_path: Path) -> No
     (snapshots_dir / "linkedin_empty.csv").write_text("", encoding="utf-8")
     groups = {"empty": ["python"]}
 
-    plans = plan_upload_snapshots(snapshots_dir, groups)
+    plans = _build_plan(snapshots_dir, groups)
     assert plans == []
 
     missing_dir = tmp_path / "missing"
-    assert plan_upload_snapshots(missing_dir, groups) == []
+    assert _build_plan(missing_dir, groups) == []
 
 
-def test_render_upload_plan_writes_details_to_stderr(tmp_path: Path, capsys) -> None:
+def test_render_upload_plan_returns_details(tmp_path: Path) -> None:
     snapshots_dir = tmp_path / "snapshots"
     snapshots_dir.mkdir()
     _write_snapshot(
         snapshots_dir / "linkedin_backend.csv",
         [("1", "Python Engineer")],
     )
-    plans = plan_upload_snapshots(snapshots_dir, {"backend": ["python"]})
+    plans = _build_plan(snapshots_dir, {"backend": ["python"]})
 
-    render_upload_plan(plans)
+    report = _render_plan(plans)
 
-    captured = capsys.readouterr()
-    assert "linkedin_backend.csv" in captured.err
-    assert "+ Python Engineer" in captured.err
-    assert upload_counts(plans) == {"backend": 1}
+    assert "linkedin_backend.csv" in report
+    assert "+ Python Engineer" in report
+    assert _plan_counts(plans) == {"backend": 1}

@@ -3,7 +3,7 @@ Python Package Management
 - Avoid editing `pyproject.toml` manually unless the `uv` CLI cannot accomplish your goal.
 
 Patterns
-- CLI commands follow the plan-and-execute pattern: see docs/plan-and-execute-pattern.md
+- CLI commands follow the plan-and-execute pattern: you MUST read `docs/plan-and-execute-pattern.md` before creating or modifying any CLI command or step function.
 - In raw SQL strings (`text(...)`, migrations): keywords UPPERCASE (`SELECT`, `FROM`, `COALESCE`, etc.); identifiers, aliases, and table/column names lowercase.
 
 Running apps

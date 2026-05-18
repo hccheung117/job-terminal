@@ -1,4 +1,3 @@
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,48 +35,53 @@ def _build_plan(
         group = group_from_filename(csv_path)
         keywords = groups.get(group)
         if not keywords:
-            plans.append(UploadSnapshotPlan(
-                group=group,
-                csv_path=csv_path,
-                records=[],
-                kept_titles=[],
-                dropped_titles=[],
-                warning=f"no keywords for group '{group}'; skipping {csv_path.name}",
-            ))
+            plans.append(
+                UploadSnapshotPlan(
+                    group=group,
+                    csv_path=csv_path,
+                    records=[],
+                    kept_titles=[],
+                    dropped_titles=[],
+                    warning=f"no keywords for group '{group}'; skipping {csv_path.name}",
+                )
+            )
             continue
 
         records, kept_titles, dropped_titles = load_snapshot_records(
             csv_path, group, keywords
         )
-        plans.append(UploadSnapshotPlan(
-            group=group,
-            csv_path=csv_path,
-            records=records,
-            kept_titles=kept_titles,
-            dropped_titles=dropped_titles,
-            keywords=keywords,
-        ))
+        plans.append(
+            UploadSnapshotPlan(
+                group=group,
+                csv_path=csv_path,
+                records=records,
+                kept_titles=kept_titles,
+                dropped_titles=dropped_titles,
+                keywords=keywords,
+            )
+        )
     return plans
 
 
-def _render_plan(plans: list[UploadSnapshotPlan]) -> None:
+def _render_plan(plans: list[UploadSnapshotPlan]) -> str:
+    lines: list[str] = []
     for plan in plans:
         if plan.warning:
-            print(f"warning: {plan.warning}", file=sys.stderr)
+            lines.append(f"warning: {plan.warning}")
             continue
         if plan.keywords is None:
             continue
-        print(f"\n{plan.csv_path.name}  (group: {plan.group})", file=sys.stderr)
-        print(f"  keywords: {', '.join(plan.keywords)}", file=sys.stderr)
-        print(
+        lines.append(f"\n{plan.csv_path.name}  (group: {plan.group})")
+        lines.append(f"  keywords: {', '.join(plan.keywords)}")
+        lines.append(
             f"  kept {len(plan.kept_titles)} / dropped {len(plan.dropped_titles)} / "
-            f"total {len(plan.kept_titles) + len(plan.dropped_titles)}",
-            file=sys.stderr,
+            f"total {len(plan.kept_titles) + len(plan.dropped_titles)}"
         )
         for title in plan.kept_titles:
-            print(f"  + {title}", file=sys.stderr)
+            lines.append(f"  + {title}")
         for title in plan.dropped_titles:
-            print(f"  - {title}", file=sys.stderr)
+            lines.append(f"  - {title}")
+    return "\n".join(lines)
 
 
 def _execute_plan(
@@ -87,7 +91,6 @@ def _execute_plan(
     counts: dict[str, int] = {}
     for plan in plans:
         if plan.warning:
-            print(f"warning: {plan.warning}", file=sys.stderr)
             counts[plan.group] = 0
             continue
         counts[plan.group] = upsert_jobs(engine, plan.records)
@@ -114,11 +117,12 @@ def upload(
         return
 
     if dry_run:
-        _render_plan(plans)
+        typer.echo(_render_plan(plans), err=True)
         for group, n in _plan_counts(plans).items():
             typer.echo(f"[dry-run] {group}: {n} rows would be upserted")
         return
 
+    typer.echo(_render_plan(plans), err=True)
     counts = _execute_plan(engine, plans)
     for group, n in counts.items():
         typer.echo(f"{group}: {n} rows upserted")

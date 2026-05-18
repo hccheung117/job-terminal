@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from services.scrape import build_scrape_plan, render_scrape_plan
+from commands.scrape import _build_plan, _render_plan
 
 SCRAPE_PARAMS = {
     "site_name": ["linkedin"],
@@ -16,7 +16,7 @@ def test_build_scrape_plan_one_plan_per_group(tmp_path: Path) -> None:
         "data": ["sql"],
     }
 
-    plans = build_scrape_plan(groups, tmp_path, SCRAPE_PARAMS)
+    plans = _build_plan(groups, tmp_path, SCRAPE_PARAMS)
 
     assert len(plans) == 2
     backend = plans[0]
@@ -34,9 +34,9 @@ def test_build_scrape_plan_one_plan_per_group(tmp_path: Path) -> None:
 
 def test_render_scrape_plan_includes_summary_and_paths(tmp_path: Path) -> None:
     groups = {"backend": ["python"]}
-    plans = build_scrape_plan(groups, tmp_path, SCRAPE_PARAMS)
+    plans = _build_plan(groups, tmp_path, SCRAPE_PARAMS)
 
-    report = render_scrape_plan(plans, SCRAPE_PARAMS)
+    report = _render_plan(plans, SCRAPE_PARAMS)
 
     assert "[dry-run] linkedin | Ireland | 100 results/group | last 24h | 1 group" in report
     assert "backend (1 keyword)" in report

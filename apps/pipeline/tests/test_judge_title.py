@@ -12,6 +12,7 @@ from steps.judge_title import (
     execute_judge_title_plan,
     plan_judge_title,
     plan_judge_title_eval,
+    render_judge_title_plan,
 )
 
 
@@ -225,3 +226,16 @@ def test_eval_includes_users_with_no_decisions(engine):
     users = plan_judge_title_eval(engine)
     assert len(users) == 1
     assert users[0].entries == []
+
+
+def test_render_judge_title_plan_returns_grouped_text(engine):
+    with Session(engine) as session:
+        user, job_pass, _ = _seed(session)
+        add_decision(session, user.id, job_pass, "title_filter", score=1)
+
+    plans = plan_judge_title(engine)
+    report = render_judge_title_plan(plans)
+
+    assert "Alice" in report
+    assert "to judge: 1" in report
+    assert "Senior Python Engineer" in report

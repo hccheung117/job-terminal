@@ -1,3 +1,4 @@
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,6 +26,13 @@ class ScrapeGroupPlan:
     search_term: str
     output_path: Path
     scrape_params: dict
+
+
+@dataclass
+class ScrapeGroupResult:
+    plan: ScrapeGroupPlan
+    job_count: int | None = None
+    error: str | None = None
 
 
 def _build_plan(
@@ -61,17 +69,17 @@ def _render_plan(plans: list[ScrapeGroupPlan], scrape_params: dict) -> str:
     return "\n".join(lines)
 
 
-def _execute_plan(plans: list[ScrapeGroupPlan]) -> list[tuple[str, str]]:
-    failures: list[tuple[str, str]] = []
+def _execute_plan(
+    plans: list[ScrapeGroupPlan],
+    scrape_jobs_fn: Callable[..., object] = scrape_jobs,
+) -> Generator[ScrapeGroupResult, None, None]:
     for plan in plans:
         try:
-            print(f"Running group '{plan.group}' with search term: {plan.search_term}")
-            jobs = scrape_jobs(search_term=plan.search_term, **plan.scrape_params)
-            print(f"Found {len(jobs)} jobs for group '{plan.group}'")
+            jobs = scrape_jobs_fn(search_term=plan.search_term, **plan.scrape_params)
             write_snapshot_csv(jobs, plan.output_path)
+            yield ScrapeGroupResult(plan=plan, job_count=len(jobs))
         except Exception as exc:
-            failures.append((plan.group, str(exc)))
-    return failures
+            yield ScrapeGroupResult(plan=plan, error=str(exc))
 
 
 def scrape(
@@ -94,7 +102,16 @@ def scrape(
         typer.echo(_render_plan(plans, SCRAPE_PARAMS))
         return
 
-    failures = _execute_plan(plans)
+    failures: list[tuple[str, str]] = []
+    for plan in plans:
+        typer.echo(f"Running group '{plan.group}' with search term: {plan.search_term}")
+        result = next(_execute_plan([plan]))
+        plan = result.plan
+        if result.error is not None:
+            failures.append((plan.group, result.error))
+            continue
+        typer.echo(f"Found {result.job_count} jobs for group '{plan.group}'")
+
     for group, message in failures:
         typer.echo(f"Group '{group}' failed: {message}", err=True)
 

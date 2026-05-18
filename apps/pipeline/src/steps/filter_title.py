@@ -1,5 +1,4 @@
 import re
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
@@ -28,6 +27,12 @@ class FilterTitlePlan:
     scope_id: str | None = None
 
 
+@dataclass
+class FilterTitlePlanOutput:
+    plans: list[FilterTitlePlan]
+    warnings: list[str]
+
+
 def _compile_pattern(keywords: list[str]) -> re.Pattern[str] | None:
     parts = [re.escape(k) for k in keywords if k]
     if not parts:
@@ -35,8 +40,9 @@ def _compile_pattern(keywords: list[str]) -> re.Pattern[str] | None:
     return re.compile(rf"\b(?:{'|'.join(parts)})\b", re.IGNORECASE)
 
 
-def plan_filter_title(engine: Engine) -> list[FilterTitlePlan]:
+def plan_filter_title(engine: Engine) -> FilterTitlePlanOutput:
     plans: list[FilterTitlePlan] = []
+    warnings: list[str] = []
 
     with Session(engine) as session:
         stopwords = session.exec(select(Stopword)).all()
@@ -61,9 +67,8 @@ def plan_filter_title(engine: Engine) -> list[FilterTitlePlan]:
             try:
                 uid = UUID(sw.scope_id)
             except ValueError:
-                print(
-                    f"warning: stopword scope_id {sw.scope_id!r} is not a UUID; skipping",
-                    file=sys.stderr,
+                warnings.append(
+                    f"stopword scope_id {sw.scope_id!r} is not a UUID; skipping"
                 )
                 continue
             user_keywords.setdefault(uid, []).append(sw.keyword)
@@ -137,7 +142,7 @@ def plan_filter_title(engine: Engine) -> list[FilterTitlePlan]:
                 )
             )
 
-    return plans
+    return FilterTitlePlanOutput(plans=plans, warnings=warnings)
 
 
 def execute_filter_title_plan(engine: Engine, plans: list[FilterTitlePlan]) -> int:
@@ -170,7 +175,8 @@ def execute_filter_title_plan(engine: Engine, plans: list[FilterTitlePlan]) -> i
     return len(rows)
 
 
-def render_filter_title_plan(plans: list[FilterTitlePlan]) -> None:
+def render_filter_title_plan(plans: list[FilterTitlePlan]) -> str:
+    lines: list[str] = []
     by_user: dict[UUID, list[FilterTitlePlan]] = {}
     for p in plans:
         by_user.setdefault(p.user_id, []).append(p)
@@ -179,12 +185,12 @@ def render_filter_title_plan(plans: list[FilterTitlePlan]) -> None:
         head = user_plans[0]
         rejects = [p for p in user_plans if p.score == 0]
         passes = [p for p in user_plans if p.score == 1]
-        print(f"\n{head.user_name} ({head.user_email})", file=sys.stderr)
-        print(f"  passes: {len(passes)}  rejections: {len(rejects)}", file=sys.stderr)
+        lines.append(f"\n{head.user_name} ({head.user_email})")
+        lines.append(f"  passes: {len(passes)}  rejections: {len(rejects)}")
         for p in rejects:
-            print(
+            lines.append(
                 f"  - {p.source_name}/{p.source_id}  "
                 f"[{p.scope_type}:{p.scope_id} -> {p.matched_keyword!r}]  "
-                f"{p.title}",
-                file=sys.stderr,
+                f"{p.title}"
             )
+    return "\n".join(lines)

@@ -1,13 +1,14 @@
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, Field as PydField
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
+import llm
 from db import dialect_insert
 from job_terminal_models import Decision, Job
 from models import Criteria, User
@@ -15,7 +16,7 @@ from paths import PROMPTS_DIR
 from steps.filter_title import STEP as TITLE_FILTER_STEP
 
 STEP = "title_judge"
-MODEL_NAME = "gemini-3.1-flash-lite-preview"
+MODEL = "gemini-3.1-flash-lite:latest"
 
 PROMPT_TEMPLATE = (PROMPTS_DIR / "judge_title.md").read_text(encoding="utf-8")
 
@@ -43,8 +44,7 @@ class TitleVerdict(BaseModel):
     reason: str = PydField(description="Concise reason for the decision.")
 
 
-class TitleJudge(Protocol):
-    def __call__(self, plan: JudgeTitlePlan) -> TitleVerdict: ...
+TitleJudge = Callable[[JudgeTitlePlan], TitleVerdict]
 
 
 def plan_judge_title(engine: Engine) -> list[JudgeTitlePlan]:
@@ -95,39 +95,22 @@ def plan_judge_title(engine: Engine) -> list[JudgeTitlePlan]:
     return plans
 
 
-def _build_default_judge() -> TitleJudge:
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
-    model = ChatGoogleGenerativeAI(model=MODEL_NAME).with_structured_output(TitleVerdict)
-
-    def judge(plan: JudgeTitlePlan) -> TitleVerdict:
-        prompt = PROMPT_TEMPLATE.format(
-            criteria=plan.criteria,
-            source_name=plan.source_name,
-            source_id=plan.source_id,
-            title=plan.title,
-        )
-        result = model.invoke(prompt)
-        if not isinstance(result, TitleVerdict):
-            raise RuntimeError(f"Unexpected Gemini structured output: {result!r}")
-        return result
-
-    return judge
+def _default_judge(plan: JudgeTitlePlan) -> TitleVerdict:
+    prompt = PROMPT_TEMPLATE.format(criteria=plan.criteria, title=plan.title)
+    return llm.judge(llm.openai(MODEL), prompt, TitleVerdict)
 
 
 def execute_judge_title_plan(
     engine: Engine,
     plans: list[JudgeTitlePlan],
-    judge: TitleJudge | None = None,
+    judge: TitleJudge = _default_judge,
 ) -> int:
     if not plans:
         return 0
 
-    judge_fn: TitleJudge = judge if judge is not None else _build_default_judge()
-
     results: list[JudgeTitleResult] = []
     for plan in plans:
-        verdict = judge_fn(plan)
+        verdict = judge(plan)
         results.append(JudgeTitleResult(plan=plan, passes=verdict.passes, reason=verdict.reason))
 
     judged_at = datetime.now(timezone.utc)

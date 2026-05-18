@@ -8,5 +8,4 @@ Reject only when the title clearly violates the user's criteria. When the eviden
 
 Job title: {title}
 
-Decide whether this job passes (passes=true) or is rejected (passes=false),
-and give a concise reason.
+Decide whether this job passes (passes=true) or is rejected (passes=false), and give a concise reason.

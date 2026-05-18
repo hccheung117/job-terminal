@@ -37,12 +37,14 @@ def make_job(
     *,
     source_name: str = "linkedin",
     groups: list[str] | None = None,
+    jd: str | None = None,
 ) -> Job:
     job = Job(
         source_name=source_name,
         source_id=source_id,
         title=title,
         groups=groups or [],
+        jd=jd,
     )
     session.add(job)
     session.commit()

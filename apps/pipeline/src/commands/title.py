@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import typer
 
 from db import build_engine
@@ -63,5 +65,19 @@ def judge(
         typer.echo(f"[dry-run] {len(plans)} title_judge pair(s) would be judged")
         return
 
-    written = execute_judge_title_plan(engine, plans)
+    typer.echo(f"\nJudging {len(plans)} title_judge candidate(s)", err=True)
+    current_user_id: UUID | None = None
+    written = 0
+    for result in execute_judge_title_plan(engine, plans):
+        p = result.plan
+        if p.user_id != current_user_id:
+            typer.echo(f"\n{p.user_name} ({p.user_email})", err=True)
+            current_user_id = p.user_id
+        suffix = "pass" if result.passes else f"reject: {result.reason}"
+        typer.echo(
+            f"  - {p.source_name}/{p.source_id}  {p.title} ... {suffix}",
+            err=True,
+        )
+        written += 1
+
     typer.echo(f"{written} title_judge decision(s) written")

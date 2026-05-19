@@ -4,6 +4,7 @@ Python Package Management
 
 Patterns
 - CLI commands follow the plan-and-execute pattern: you MUST read `docs/plan-and-execute-pattern.md` before creating or modifying any CLI command or step function.
+- CLI outputs MUST follow the TUI design principles: you MUST read `docs/tui-design.md` and check other command outputs as references before modifying or creating any CLI outputs.
 - In raw SQL strings (`text(...)`, migrations): keywords UPPERCASE (`SELECT`, `FROM`, `COALESCE`, etc.); identifiers, aliases, and table/column names lowercase.
 
 Running apps

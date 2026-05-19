@@ -1,24 +1,33 @@
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+
 import typer
 from job_terminal_tui import TuiFormatter
 from rich.console import Console
-from rich.markdown import Markdown
 
 from db import build_engine
 from steps.report import (
     execute_report_plan,
     plan_report,
-    render_report_preview,
+    render_report_previews,
 )
 
 _console = Console()
 _err_console = Console(stderr=True)
 
 
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", value).strip("-").lower()
+    return slug or "user"
+
+
 def report(
     preview: bool = typer.Option(
         False,
         "--preview",
-        help="Print the markdown email draft for each user instead of sending.",
+        help="Render each user's email HTML into a temp folder and open it.",
     ),
 ) -> None:
     """Report the jobs each user has not been filtered out of, so far."""
@@ -26,9 +35,20 @@ def report(
     reports = plan_report(engine)
 
     if preview:
-        markdown = render_report_preview(reports)
-        if markdown:
-            Console().print(Markdown(markdown))
+        previews = render_report_previews(reports)
+        if not previews:
+            fmt = TuiFormatter()
+            fmt.info("No emails to preview")
+            _console.print(fmt.render())
+            return
+        folder = Path(tempfile.mkdtemp(prefix="job-terminal-preview-"))
+        for user_report, html in previews:
+            name = f"{_slugify(user_report.user_name)}-{user_report.user_id}.html"
+            (folder / name).write_text(html)
+        subprocess.run(["open", str(folder)], check=False)
+        fmt = TuiFormatter()
+        fmt.success(f"{len(previews)} email(s) rendered to {folder}")
+        _console.print(fmt.render())
         return
 
     result = execute_report_plan(engine, reports)

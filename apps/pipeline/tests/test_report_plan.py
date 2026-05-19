@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session
 
 from conftest import add_decision, add_report_send, make_job, make_user
-from steps.report import plan_report, render_report_preview
+from steps.report import plan_report, render_report_previews
 
 
 def test_report_uses_furthest_passed_step(engine):
@@ -62,17 +62,28 @@ def test_report_empty_when_user_has_no_decisions(engine):
     assert reports[0].jobs == []
 
 
-def test_render_report_preview_returns_markdown(engine):
+def test_render_report_previews_returns_html_per_user_with_jobs(engine):
     with Session(engine) as session:
         user = make_user(session)
         job = make_job(session, "1", "Senior Python Engineer")
         add_decision(session, user.id, job, "title_filter", score=1)
 
     reports = plan_report(engine)
-    markdown = render_report_preview(reports)
+    previews = render_report_previews(reports)
 
-    assert "Jobs for Alice" in markdown
-    assert "Senior Python Engineer" in markdown
+    assert len(previews) == 1
+    rendered_user, html = previews[0]
+    assert rendered_user.user_name == "Alice"
+    assert "Senior Python Engineer" in html
+    assert "<html" in html.lower()
+
+
+def test_render_report_previews_skips_users_without_jobs(engine):
+    with Session(engine) as session:
+        make_user(session)
+
+    reports = plan_report(engine)
+    assert render_report_previews(reports) == []
 
 
 def test_report_includes_only_decisions_after_user_cutoff(engine):

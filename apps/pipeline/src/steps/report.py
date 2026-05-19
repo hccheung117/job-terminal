@@ -32,9 +32,9 @@ class UserReport:
 
 
 _FUNNEL_LABELS = {
-    "title_filter": "Filter",
-    "title_judge": "Judge",
-    "jd_judge": "Selected",
+    "title_filter": "Kept",
+    "title_judge": "Shortlisted",
+    "jd_judge": "Picked",
 }
 
 
@@ -117,7 +117,7 @@ def plan_report(engine: Engine) -> list[UserReport]:
         report.jobs = by_user.get(report.user_id, [])
         report.cutoff_at = max_judged.get(report.user_id)
         user_passes = pass_counts.get(report.user_id, {})
-        report.funnel = [FunnelStage("Saw", saw_counts.get(report.user_id, 0))] + [
+        report.funnel = [FunnelStage("Seen", saw_counts.get(report.user_id, 0))] + [
             FunnelStage(_FUNNEL_LABELS[step], user_passes.get(step, 0))
             for step in PIPELINE_STEPS
         ]
@@ -149,31 +149,15 @@ def _ago(then: datetime | None, now: datetime) -> str:
     return f"{years}y ago"
 
 
-def _report_markdown(report: UserReport, now: datetime) -> str:
-    lines = [f"# Jobs for {report.user_name} ({report.user_email})", ""]
-    if not report.jobs:
-        lines += ["_No surviving jobs._", ""]
-        return "\n".join(lines)
-    for job in report.jobs:
-        title = job.title or "(no title)"
-        url = job.url or ""
-        heading = f"[{title}]({url})" if url else title
-        lines.append(
-            f"- **{heading}** — {job.source_name} · {_ago(job.published_at, now)}"
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
-def render_report_preview(reports: list[UserReport]) -> str:
-    now = datetime.now(timezone.utc)
-    return "\n\n".join(_report_markdown(report, now) for report in reports)
-
-
 _jinja_env = Environment(
     loader=FileSystemLoader(Path(__file__).parent),
     autoescape=select_autoescape(default=True),
 )
+
+
+def render_report_previews(reports: list[UserReport]) -> list[tuple[UserReport, str]]:
+    now = datetime.now(timezone.utc)
+    return [(r, _render_email_html(r, now)) for r in reports if r.jobs]
 
 
 def _render_email_html(report: UserReport, now: datetime) -> str:

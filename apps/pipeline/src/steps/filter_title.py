@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
+from job_terminal_tui import TuiFormatter
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
@@ -176,7 +177,7 @@ def execute_filter_title_plan(engine: Engine, plans: list[FilterTitlePlan]) -> i
 
 
 def render_filter_title_plan(plans: list[FilterTitlePlan]) -> str:
-    lines: list[str] = []
+    fmt = TuiFormatter()
     by_user: dict[UUID, list[FilterTitlePlan]] = {}
     for p in plans:
         by_user.setdefault(p.user_id, []).append(p)
@@ -185,12 +186,10 @@ def render_filter_title_plan(plans: list[FilterTitlePlan]) -> str:
         head = user_plans[0]
         rejects = [p for p in user_plans if p.score == 0]
         passes = [p for p in user_plans if p.score == 1]
-        lines.append(f"\n{head.user_name} ({head.user_email})")
-        lines.append(f"  passes: {len(passes)}  rejections: {len(rejects)}")
+        fmt.header(f"{head.user_name} ({TuiFormatter.dim(head.user_email)})")
+        fmt.success(f"{len(passes)} passed", indent=2)
+        fmt.error(f"{len(rejects)} rejected", indent=2)
         for p in rejects:
-            lines.append(
-                f"  - {p.source_name}/{p.source_id}  "
-                f"[{p.scope_type}:{p.scope_id} -> {p.matched_keyword!r}]  "
-                f"{p.title}"
-            )
-    return "\n".join(lines)
+            match = f" (matched: {p.matched_keyword!r})" if p.matched_keyword else ""
+            fmt.dropped(f"{p.title}{match}", indent=4)
+    return fmt.render()

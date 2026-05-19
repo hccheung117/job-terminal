@@ -239,3 +239,4 @@ def test_render_judge_title_plan_returns_grouped_text(engine):
     assert "Alice" in report
     assert "to judge: 1" in report
     assert "Senior Python Engineer" in report
+    assert "linkedin/" not in report

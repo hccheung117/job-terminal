@@ -76,5 +76,7 @@ def test_render_filter_title_plan_groups_by_user(engine):
     report = render_filter_title_plan(output.plans)
 
     assert "Alice" in report
-    assert "passes: 1  rejections: 1" in report
+    assert "1 passed" in report
+    assert "1 rejected" in report
     assert "Java Developer" in report
+    assert "matched: 'java'" in report

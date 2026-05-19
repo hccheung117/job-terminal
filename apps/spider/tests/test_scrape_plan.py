@@ -41,4 +41,4 @@ def test_render_scrape_plan_includes_summary_and_paths(tmp_path: Path) -> None:
     assert "[dry-run] linkedin | Ireland | 100 results/group | last 24h | 1 group" in report
     assert "backend (1 keyword)" in report
     assert "query: python" in report
-    assert f"output: {tmp_path / 'linkedin_backend.csv'}" in report
+    assert str(tmp_path / "linkedin_backend.csv") in report

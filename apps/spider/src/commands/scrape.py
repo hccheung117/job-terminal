@@ -5,6 +5,8 @@ from pathlib import Path
 import jobspy_patch  # noqa: F401  # patches LinkedIn date_posted selector
 import typer
 from jobspy import scrape_jobs
+from job_terminal_tui import TuiFormatter
+from rich.console import Console
 
 from db import build_engine
 from paths import SNAPSHOTS_DIR
@@ -17,6 +19,9 @@ SCRAPE_PARAMS: dict = {
     "results_wanted": 100,
     "hours_old": 24,
 }
+
+_console = Console()
+_err_console = Console(stderr=True)
 
 
 @dataclass(frozen=True)
@@ -55,18 +60,20 @@ def _build_plan(
 def _render_plan(plans: list[ScrapeGroupPlan], scrape_params: dict) -> str:
     site_name = ", ".join(scrape_params["site_name"])
     group_label = "group" if len(plans) == 1 else "groups"
-    lines = [
+    fmt = TuiFormatter()
+    fmt.info(
         f"[dry-run] {site_name} | {scrape_params['location']} | "
         f"{scrape_params['results_wanted']} results/group | "
-        f"last {scrape_params['hours_old']}h | {len(plans)} {group_label}",
-        "",
-    ]
+        f"last {scrape_params['hours_old']}h | {len(plans)} {group_label}"
+    )
     for plan in plans:
         keyword_label = "keyword" if len(plan.keywords) == 1 else "keywords"
-        lines.append(f"{plan.group} ({len(plan.keywords)} {keyword_label})")
-        lines.append(f"  query: {plan.search_term}")
-        lines.append(f"  output: {plan.output_path}")
-    return "\n".join(lines)
+        fmt.header(
+            f"{plan.group} ({len(plan.keywords)} {keyword_label})"
+        )
+        fmt.info(f"query: {plan.search_term}", indent=2)
+        fmt.info(f"output: {plan.output_path}", indent=2)
+    return fmt.render()
 
 
 def _execute_plan(
@@ -99,23 +106,37 @@ def scrape(
     plans = _build_plan(groups, SNAPSHOTS_DIR, SCRAPE_PARAMS)
 
     if dry_run:
-        typer.echo(_render_plan(plans, SCRAPE_PARAMS))
+        _console.print(_render_plan(plans, SCRAPE_PARAMS))
         return
 
     failures: list[tuple[str, str]] = []
+    total_jobs = 0
     for plan in plans:
-        typer.echo(f"Running group '{plan.group}' with search term: {plan.search_term}")
+        fmt = TuiFormatter()
+        fmt.info(f"Scraping group '{plan.group}' ({plan.search_term})")
+        _console.print(fmt.render())
         result = next(_execute_plan([plan]))
         plan = result.plan
         if result.error is not None:
             failures.append((plan.group, result.error))
             continue
-        typer.echo(f"Found {result.job_count} jobs for group '{plan.group}'")
+        total_jobs += result.job_count or 0
+        fmt = TuiFormatter()
+        fmt.success(f"Found {result.job_count} jobs for group '{plan.group}'")
+        _console.print(fmt.render())
 
     for group, message in failures:
-        typer.echo(f"Group '{group}' failed: {message}", err=True)
+        fmt = TuiFormatter()
+        fmt.error(f"Group '{group}' failed: {message}")
+        _err_console.print(fmt.render())
 
     if failures:
         failed_groups = ", ".join(group for group, _ in failures)
-        typer.echo(f"Failed groups: {failed_groups}", err=True)
+        fmt = TuiFormatter()
+        fmt.error(f"Failed groups: {failed_groups}")
+        _err_console.print(fmt.render())
         raise typer.Exit(code=1)
+
+    fmt = TuiFormatter()
+    fmt.success(f"Found {total_jobs} jobs across {len(plans)} group(s)")
+    _console.print(fmt.render())

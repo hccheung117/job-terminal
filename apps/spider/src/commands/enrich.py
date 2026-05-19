@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
 import typer
+from job_terminal_tui import TuiFormatter
+from rich.console import Console
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import text
 from sqlmodel import Session
@@ -11,6 +13,9 @@ from services.linkedin import build_scraper, fetch_jd, polite_sleep
 
 SOURCE_NAME = "linkedin"
 TITLE_STEP = "title_filter"
+
+_console = Console()
+_err_console = Console(stderr=True)
 
 
 @dataclass
@@ -46,7 +51,9 @@ def _build_plan(engine: Engine) -> EnrichPlan:
 
 
 def _render_plan(plan: EnrichPlan) -> str:
-    return f"survivors to fetch: {len(plan.survivor_ids)}"
+    fmt = TuiFormatter()
+    fmt.info(f"survivors to fetch: {len(plan.survivor_ids)}")
+    return fmt.render()
 
 
 def _execute_plan(engine: Engine, plan: EnrichPlan) -> int:
@@ -75,9 +82,13 @@ def enrich(
     plan = _build_plan(engine)
 
     if dry_run:
-        typer.echo(_render_plan(plan), err=True)
-        typer.echo(f"[dry-run] {len(plan.survivor_ids)} JDs would be fetched")
+        _err_console.print(_render_plan(plan))
+        fmt = TuiFormatter()
+        fmt.info(f"[dry-run] {len(plan.survivor_ids)} JDs would be fetched")
+        _err_console.print(fmt.render())
         return
 
     fetched = _execute_plan(engine, plan)
-    typer.echo(f"{fetched} JDs fetched")
+    fmt = TuiFormatter()
+    fmt.success(f"{fetched} JDs fetched successfully")
+    _console.print(fmt.render())

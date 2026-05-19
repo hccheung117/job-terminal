@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
+from job_terminal_tui import TuiFormatter
 from pydantic import BaseModel, Field as PydField
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
@@ -149,18 +150,18 @@ def execute_judge_title_plan(
 
 
 def render_judge_title_plan(plans: list[JudgeTitlePlan]) -> str:
-    lines: list[str] = []
+    fmt = TuiFormatter()
     by_user: dict[UUID, list[JudgeTitlePlan]] = {}
     for p in plans:
         by_user.setdefault(p.user_id, []).append(p)
 
     for user_plans in by_user.values():
         head = user_plans[0]
-        lines.append(f"\n{head.user_name} ({head.user_email})")
-        lines.append(f"  to judge: {len(user_plans)}")
+        fmt.header(f"{head.user_name} ({TuiFormatter.dim(head.user_email)})")
+        fmt.info(f"to judge: {len(user_plans)}", indent=2)
         for p in user_plans:
-            lines.append(f"  - {p.source_name}/{p.source_id}  {p.title}")
-    return "\n".join(lines)
+            fmt.info(p.title, indent=2)
+    return fmt.render()
 
 
 def plan_judge_title_eval(engine: Engine) -> list[JudgeTitleEvalUser]:

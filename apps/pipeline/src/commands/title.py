@@ -1,6 +1,8 @@
 from uuid import UUID
 
 import typer
+from job_terminal_tui import TuiFormatter
+from rich.console import Console
 
 from db import build_engine
 from steps.filter_title import (
@@ -15,6 +17,8 @@ from steps.judge_title import (
 )
 
 app = typer.Typer(add_completion=False, help="Title-field pipeline commands.")
+_console = Console()
+_err_console = Console(stderr=True)
 
 
 @app.command("filter")
@@ -31,7 +35,9 @@ def filter(
     plans = output.plans
 
     for warning in output.warnings:
-        typer.echo(f"warning: {warning}", err=True)
+        fmt = TuiFormatter()
+        fmt.info(f"warning: {warning}")
+        _err_console.print(fmt.render())
 
     if not plans:
         typer.echo("No new title_filter decisions to write. Nothing to do.")
@@ -39,14 +45,18 @@ def filter(
 
     report = render_filter_title_plan(plans)
     if report:
-        typer.echo(report, err=True)
+        _err_console.print(report)
 
     if dry_run:
-        typer.echo(f"[dry-run] {len(plans)} title_filter decision(s) would be written")
+        fmt = TuiFormatter()
+        fmt.info(f"[dry-run] {len(plans)} title_filter decision(s) would be written")
+        _err_console.print(fmt.render())
         return
 
     written = execute_filter_title_plan(engine, plans)
-    typer.echo(f"{written} title_filter decision(s) written")
+    fmt = TuiFormatter()
+    fmt.success(f"{written} title_filter decision(s) written")
+    _console.print(fmt.render())
 
 
 @app.command("judge")
@@ -65,27 +75,36 @@ def judge(
         typer.echo("No new title_judge candidates. Nothing to do.")
         return
 
-    report = render_judge_title_plan(plans)
-    if report:
-        typer.echo(report, err=True)
-
     if dry_run:
-        typer.echo(f"[dry-run] {len(plans)} title_judge pair(s) would be judged")
+        report = render_judge_title_plan(plans)
+        if report:
+            _err_console.print(report)
+        fmt = TuiFormatter()
+        fmt.info(f"[dry-run] {len(plans)} title_judge pair(s) would be judged")
+        _err_console.print(fmt.render())
         return
 
-    typer.echo(f"\nJudging {len(plans)} title_judge candidate(s)", err=True)
+    fmt = TuiFormatter()
+    fmt.info(f"Judging {len(plans)} title_judge candidate(s)")
+    _err_console.print(fmt.render())
+
     current_user_id: UUID | None = None
     written = 0
     for result in execute_judge_title_plan(engine, plans):
         p = result.plan
         if p.user_id != current_user_id:
-            typer.echo(f"\n{p.user_name} ({p.user_email})", err=True)
+            header_fmt = TuiFormatter()
+            header_fmt.header(f"{p.user_name} ({TuiFormatter.dim(p.user_email)})")
+            _err_console.print(header_fmt.render())
             current_user_id = p.user_id
-        suffix = "pass" if result.passes else f"reject: {result.reason}"
-        typer.echo(
-            f"  - {p.source_name}/{p.source_id}  {p.title} ... {suffix}",
-            err=True,
-        )
+        line_fmt = TuiFormatter()
+        if result.passes:
+            line_fmt.success(p.title, indent=2)
+        else:
+            line_fmt.rejected_with_reason(p.title, result.reason, indent=2)
+        _err_console.print(line_fmt.render())
         written += 1
 
-    typer.echo(f"{written} title_judge decision(s) written")
+    summary_fmt = TuiFormatter()
+    summary_fmt.success(f"{written} title_judge decision(s) written")
+    _console.print(summary_fmt.render())

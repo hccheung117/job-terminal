@@ -85,5 +85,6 @@ def test_render_upload_plan_returns_details(tmp_path: Path) -> None:
     report = _render_plan(plans)
 
     assert "linkedin_backend.csv" in report
-    assert "+ Python Engineer" in report
+    assert "Python Engineer" in report
+    assert "[green]+[/green] Python Engineer" in report
     assert _plan_counts(plans) == {"backend": 1}

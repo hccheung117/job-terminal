@@ -1,4 +1,5 @@
 import typer
+from job_terminal_tui import TuiFormatter
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -8,6 +9,9 @@ from steps.report import (
     plan_report,
     render_report_preview,
 )
+
+_console = Console()
+_err_console = Console(stderr=True)
 
 
 def report(
@@ -29,10 +33,11 @@ def report(
 
     result = execute_report_plan(engine, reports)
     for failure in result.failures:
-        typer.echo(
-            f"Failed to send report for user {failure.user_id}: {failure.message}",
-            err=True,
-        )
-    typer.echo(f"{result.sent} report(s) sent")
+        fmt = TuiFormatter()
+        fmt.error(f"Failed to send report for user {failure.user_id}: {failure.message}")
+        _err_console.print(fmt.render())
+    fmt = TuiFormatter()
+    fmt.success(f"{result.sent} report(s) sent")
+    _console.print(fmt.render())
     if result.failures:
         raise typer.Exit(code=1)

@@ -4,6 +4,7 @@ version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "job-terminal-models",
+    "job-terminal-tui",
     "psycopg2>=2.9.12",
     "python-dotenv>=1.2.2",
     "python-jobspy==1.1.82",
@@ -13,6 +14,7 @@ dependencies = [
 
 [tool.uv.sources]
 job-terminal-models = { workspace = true }
+job-terminal-tui = { workspace = true }
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import typer
+from job_terminal_tui import TuiFormatter
+from rich.console import Console
 from sqlalchemy.engine import Engine
 
 from db import build_engine
@@ -13,6 +15,9 @@ from services.snapshots import (
     iter_snapshots,
     load_snapshot_records,
 )
+
+_console = Console()
+_err_console = Console(stderr=True)
 
 
 @dataclass
@@ -64,24 +69,28 @@ def _build_plan(
 
 
 def _render_plan(plans: list[UploadSnapshotPlan]) -> str:
-    lines: list[str] = []
+    fmt = TuiFormatter()
     for plan in plans:
         if plan.warning:
-            lines.append(f"warning: {plan.warning}")
+            fmt.info(f"warning: {plan.warning}")
             continue
         if plan.keywords is None:
             continue
-        lines.append(f"\n{plan.csv_path.name}  (group: {plan.group})")
-        lines.append(f"  keywords: {', '.join(plan.keywords)}")
-        lines.append(
-            f"  kept {len(plan.kept_titles)} / dropped {len(plan.dropped_titles)} / "
-            f"total {len(plan.kept_titles) + len(plan.dropped_titles)}"
+        total = len(plan.kept_titles) + len(plan.dropped_titles)
+        fmt.header(
+            f"{plan.csv_path.name}  (group: {TuiFormatter.dim(plan.group)})"
+        )
+        fmt.info(
+            f"Total: {total} | Kept: {len(plan.kept_titles)} | "
+            f"Dropped: {len(plan.dropped_titles)}",
+            indent=2,
         )
         for title in plan.kept_titles:
-            lines.append(f"  + {title}")
-        for title in plan.dropped_titles:
-            lines.append(f"  - {title}")
-    return "\n".join(lines)
+            fmt.added(title, indent=2)
+        dropped_count = len(plan.dropped_titles)
+        if dropped_count:
+            fmt.dropped(f"{dropped_count} jobs skipped", indent=2)
+    return fmt.render()
 
 
 def _execute_plan(
@@ -116,13 +125,21 @@ def upload(
         typer.echo("No snapshots found in data/snapshots/. Nothing to do.")
         return
 
+    report = _render_plan(plans)
+
     if dry_run:
-        typer.echo(_render_plan(plans), err=True)
+        if report:
+            _err_console.print(report)
         for group, n in _plan_counts(plans).items():
-            typer.echo(f"[dry-run] {group}: {n} rows would be upserted")
+            fmt = TuiFormatter()
+            fmt.info(f"[dry-run] {group}: {n} rows would be upserted")
+            _err_console.print(fmt.render())
         return
 
-    typer.echo(_render_plan(plans), err=True)
+    if report:
+        _err_console.print(report)
     counts = _execute_plan(engine, plans)
-    for group, n in counts.items():
-        typer.echo(f"{group}: {n} rows upserted")
+    total = sum(counts.values())
+    fmt = TuiFormatter()
+    fmt.success(f"{total} rows upserted")
+    _console.print(fmt.render())

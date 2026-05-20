@@ -8,6 +8,8 @@ from job_terminal_tui import TuiFormatter
 from rich.console import Console
 
 from db import build_engine
+from paths import INSIGHTS_DIR
+from steps.insight import apply_insights
 from steps.report import (
     execute_report_plan,
     plan_report,
@@ -33,6 +35,7 @@ def report(
     """Report the jobs each user has not been filtered out of, so far."""
     engine = build_engine()
     reports = plan_report(engine)
+    apply_insights(reports, cache_dir=INSIGHTS_DIR)
 
     if preview:
         previews = render_report_previews(reports)

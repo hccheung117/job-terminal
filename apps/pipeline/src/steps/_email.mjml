@@ -82,6 +82,13 @@
         color: #8a7960;
         font-size: 16px;
       }
+      .insight {
+        font-family: Georgia, 'Iowan Old Style', serif;
+        font-size: 15px;
+        line-height: 1.6;
+        color: #1a1714;
+        font-style: italic;
+      }
       .footer-note {
         font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
         font-size: 9px;
@@ -146,6 +153,14 @@
       <mj-section padding="4px 40px 0">
         <mj-column>
           <mj-divider border-color="#e0d4ba" border-width="1px" padding="0" />
+        </mj-column>
+      </mj-section>
+      {% endif %}
+
+      {% if insight %}
+      <mj-section padding="20px 40px 0">
+        <mj-column>
+          <mj-text css-class="insight">{{ insight }}</mj-text>
         </mj-column>
       </mj-section>
       {% endif %}

@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
 from job_terminal_models import Decision, Job
-from models import ReportSend, User
+from models import Criteria, ReportSend, User
 from steps import PIPELINE_STEPS
 
 
@@ -22,6 +22,52 @@ class FunnelStage:
 
 
 @dataclass
+class FunnelCounts:
+    seen: int
+    kept: int
+    shortlisted: int
+    picked: int
+
+
+@dataclass
+class PickedJob:
+    title: str
+    source_name: str
+    source_id: str
+    url: str | None
+    location: str | None
+    groups: list[str]
+    published_age: str
+    jd_available: bool
+
+
+@dataclass
+class RejectedJob:
+    title: str
+    source_name: str
+    source_id: str
+    failed_step: str
+    reason: str | None
+    location: str | None
+    groups: list[str]
+
+
+@dataclass
+class ReportInsightInput:
+    user_name: str
+    criteria: str
+    window_start: datetime | None
+    window_end: datetime | None
+    funnel: FunnelCounts
+    picked: list[PickedJob]
+    rejected: list[RejectedJob]
+    removed_total: int
+    removed_by_title_filter: int
+    removed_by_title_judge: int
+    removed_by_jd_judge: int
+
+
+@dataclass
 class UserReport:
     user_id: UUID
     user_name: str
@@ -29,6 +75,8 @@ class UserReport:
     jobs: list[Job] = field(default_factory=list)
     funnel: list[FunnelStage] = field(default_factory=list)
     cutoff_at: datetime | None = None
+    insight_input: ReportInsightInput | None = None
+    insight: str | None = None
 
 
 _FUNNEL_LABELS = {
@@ -60,6 +108,7 @@ def plan_report(engine: Engine) -> list[UserReport]:
     with Session(engine) as session:
         users = session.exec(select(User)).all()
         jobs = {(j.source_name, j.source_id): j for j in session.exec(select(Job)).all()}
+        criteria = {c.user_id: c.criteria for c in session.exec(select(Criteria)).all()}
         decisions = session.exec(
             select(
                 Decision.user_id,
@@ -67,6 +116,7 @@ def plan_report(engine: Engine) -> list[UserReport]:
                 Decision.source_id,
                 Decision.step,
                 Decision.score,
+                Decision.reason,
                 Decision.judged_at,
             )
         ).all()
@@ -79,48 +129,114 @@ def plan_report(engine: Engine) -> list[UserReport]:
                 latest_cutoffs[uid] = cutoff
 
     step_rank = {s: i for i, s in enumerate(PIPELINE_STEPS)}
-    seen_ranks = [step_rank[step] for _, _, _, step, _, _ in decisions if step in step_rank]
+    in_window = [
+        (uid, src, sid, step, score, reason, _as_utc(judged_at))
+        for uid, src, sid, step, score, reason, judged_at in decisions
+        if (latest_cutoffs.get(uid) is None or _as_utc(judged_at) > latest_cutoffs[uid])
+    ]
     reports = [
         UserReport(user_id=u.id, user_name=u.name, user_email=u.email) for u in users
     ]
-    if not seen_ranks:
+    if not in_window:
         return reports
 
+    seen_ranks = [step_rank[step] for _, _, _, step, _, _, _ in in_window if step in step_rank]
+    if not seen_ranks:
+        return reports
     target_step = PIPELINE_STEPS[max(seen_ranks)]
     first_step = PIPELINE_STEPS[0]
+
     by_user: dict[UUID, list[Job]] = {}
-    max_judged: dict[UUID, datetime] = {}
+    pick_max_judged: dict[UUID, datetime] = {}
+    window_min: dict[UUID, datetime] = {}
+    window_max: dict[UUID, datetime] = {}
     saw_counts: dict[UUID, int] = {}
     pass_counts: dict[UUID, dict[str, int]] = {}
-    for uid, source_name, source_id, step, score, judged_at in decisions:
-        judged_at = _as_utc(judged_at)
-        cutoff = latest_cutoffs.get(uid)
-        if cutoff is not None and judged_at <= cutoff:
-            continue
+    fail_counts: dict[UUID, dict[str, int]] = {}
+    rejected_by_user: dict[UUID, list[RejectedJob]] = {}
+    user_seen: set[UUID] = set()
+
+    for uid, src, sid, step, score, reason, judged_at in in_window:
+        user_seen.add(uid)
         if step == first_step:
             saw_counts[uid] = saw_counts.get(uid, 0) + 1
-        if score == 1 and step in step_rank:
-            pass_counts.setdefault(uid, {})[step] = (
-                pass_counts.setdefault(uid, {}).get(step, 0) + 1
-            )
-        if step != target_step or score != 1:
-            continue
-        job = jobs.get((source_name, source_id))
-        if job is None:
-            continue
-        by_user.setdefault(uid, []).append(job)
-        current_max = max_judged.get(uid)
-        if current_max is None or judged_at > current_max:
-            max_judged[uid] = judged_at
+        if step in step_rank:
+            bucket = pass_counts if score == 1 else fail_counts
+            bucket.setdefault(uid, {})[step] = bucket.setdefault(uid, {}).get(step, 0) + 1
+        cur_min = window_min.get(uid)
+        if cur_min is None or judged_at < cur_min:
+            window_min[uid] = judged_at
+        cur_max = window_max.get(uid)
+        if cur_max is None or judged_at > cur_max:
+            window_max[uid] = judged_at
+        if score == 0 and step in step_rank:
+            job = jobs.get((src, sid))
+            if job is not None and job.title:
+                rejected_by_user.setdefault(uid, []).append(
+                    RejectedJob(
+                        title=job.title,
+                        source_name=src,
+                        source_id=sid,
+                        failed_step=step,
+                        reason=reason,
+                        location=job.location,
+                        groups=list(job.groups),
+                    )
+                )
+        if step == target_step and score == 1:
+            job = jobs.get((src, sid))
+            if job is not None:
+                by_user.setdefault(uid, []).append(job)
+                cur = pick_max_judged.get(uid)
+                if cur is None or judged_at > cur:
+                    pick_max_judged[uid] = judged_at
 
+    now = datetime.now(timezone.utc)
     for report in reports:
         report.jobs = by_user.get(report.user_id, [])
-        report.cutoff_at = max_judged.get(report.user_id)
+        report.cutoff_at = pick_max_judged.get(report.user_id)
         user_passes = pass_counts.get(report.user_id, {})
         report.funnel = [FunnelStage("Seen", saw_counts.get(report.user_id, 0))] + [
             FunnelStage(_FUNNEL_LABELS[step], user_passes.get(step, 0))
             for step in PIPELINE_STEPS
         ]
+        if report.user_id not in user_seen:
+            continue
+        fails = fail_counts.get(report.user_id, {})
+        f_title = fails.get("title_filter", 0)
+        f_tjudge = fails.get("title_judge", 0)
+        f_jd = fails.get("jd_judge", 0)
+        picked_jobs = [
+            PickedJob(
+                title=j.title or "(no title)",
+                source_name=j.source_name,
+                source_id=j.source_id,
+                url=j.url,
+                location=j.location,
+                groups=list(j.groups),
+                published_age=_ago(j.published_at, now),
+                jd_available=bool(j.jd),
+            )
+            for j in report.jobs
+        ]
+        report.insight_input = ReportInsightInput(
+            user_name=report.user_name,
+            criteria=criteria.get(report.user_id, ""),
+            window_start=window_min.get(report.user_id),
+            window_end=window_max.get(report.user_id),
+            funnel=FunnelCounts(
+                seen=saw_counts.get(report.user_id, 0),
+                kept=user_passes.get("title_filter", 0),
+                shortlisted=user_passes.get("title_judge", 0),
+                picked=user_passes.get("jd_judge", 0),
+            ),
+            picked=picked_jobs,
+            rejected=rejected_by_user.get(report.user_id, []),
+            removed_total=f_title + f_tjudge + f_jd,
+            removed_by_title_filter=f_title,
+            removed_by_title_judge=f_tjudge,
+            removed_by_jd_judge=f_jd,
+        )
     return reports
 
 
@@ -176,6 +292,7 @@ def _render_email_html(report: UserReport, now: datetime) -> str:
         jobs=jobs,
         funnel=report.funnel,
         date=now.strftime("%a %b %-d, %Y").upper(),
+        insight=report.insight,
     )
     return mjml2html(mjml_source)
 

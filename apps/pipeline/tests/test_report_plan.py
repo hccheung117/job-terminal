@@ -154,3 +154,80 @@ def test_report_uses_latest_cutoff_when_user_has_multiple_sends(engine):
 
     reports = plan_report(engine)
     assert {j.title for j in reports[0].jobs} == {"After"}
+
+
+def test_report_insight_input_includes_picked_and_rejected_after_cutoff(engine):
+    cutoff = datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc)
+    before = datetime(2026, 5, 17, 11, 0, tzinfo=timezone.utc)
+    after = datetime(2026, 5, 17, 13, 0, tzinfo=timezone.utc)
+    with Session(engine) as session:
+        from models import Criteria
+        user = make_user(session)
+        session.add(Criteria(user_id=user.id, criteria="Senior Python"))
+        session.commit()
+        kept = make_job(session, "1", "Senior Python Engineer", jd="JD")
+        rej_filter = make_job(session, "2", "Frontend Designer")
+        rej_judge = make_job(session, "3", "Staff Engineer")
+        old = make_job(session, "4", "Old Job")
+        add_decision(session, user.id, kept, "title_filter", score=1, judged_at=after)
+        add_decision(session, user.id, kept, "title_judge", score=1, judged_at=after)
+        add_decision(session, user.id, kept, "jd_judge", score=1, judged_at=after)
+        add_decision(session, user.id, rej_filter, "title_filter", score=0, reason="stopword", judged_at=after)
+        add_decision(session, user.id, rej_judge, "title_filter", score=1, judged_at=after)
+        add_decision(session, user.id, rej_judge, "title_judge", score=0, reason="not a fit", judged_at=after)
+        add_decision(session, user.id, old, "title_filter", score=1, judged_at=before)
+        add_report_send(session, user.id, cutoff_at=cutoff)
+
+    reports = plan_report(engine)
+    insight = reports[0].insight_input
+    assert insight is not None
+    assert insight.user_name == "Alice"
+    assert insight.criteria == "Senior Python"
+    assert insight.funnel.seen == 3
+    assert insight.funnel.kept == 2
+    assert insight.funnel.shortlisted == 1
+    assert insight.funnel.picked == 1
+    assert insight.removed_total == 2
+    assert insight.removed_by_title_filter == 1
+    assert insight.removed_by_title_judge == 1
+    assert insight.removed_by_jd_judge == 0
+    assert {p.title for p in insight.picked} == {"Senior Python Engineer"}
+    assert {(r.title, r.failed_step) for r in insight.rejected} == {
+        ("Frontend Designer", "title_filter"),
+        ("Staff Engineer", "title_judge"),
+    }
+    pick = insight.picked[0]
+    assert pick.source_name == "linkedin"
+    assert pick.source_id == "1"
+    assert pick.jd_available is True
+
+
+def test_report_insight_input_none_when_no_decisions(engine):
+    with Session(engine) as session:
+        make_user(session)
+    reports = plan_report(engine)
+    assert reports[0].insight_input is None
+
+
+def test_email_renders_insight_when_present(engine):
+    with Session(engine) as session:
+        user = make_user(session)
+        job = make_job(session, "1", "Senior Python Engineer")
+        add_decision(session, user.id, job, "title_filter", score=1)
+    reports = plan_report(engine)
+    reports[0].insight = "The funnel saved you from reading nine roles today."
+    previews = render_report_previews(reports)
+    _, html = previews[0]
+    assert "saved you from reading nine roles" in html
+
+
+def test_email_omits_insight_block_when_absent(engine):
+    with Session(engine) as session:
+        user = make_user(session)
+        job = make_job(session, "1", "Senior Python Engineer")
+        add_decision(session, user.id, job, "title_filter", score=1)
+    reports = plan_report(engine)
+    reports[0].insight = None
+    previews = render_report_previews(reports)
+    _, html = previews[0]
+    assert 'class="insight"' not in html

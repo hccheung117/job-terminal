@@ -1,6 +1,8 @@
 .venv/
+.idea/
 .playwright-mcp/
 __pycache__/
 .env
 CLAUDE.local.md
 data/**/*.csv
+data/**/*.md

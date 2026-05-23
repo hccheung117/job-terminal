@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "job-terminal-models",
     "job-terminal-tui",
-    "psycopg2>=2.9.12",
+    "psycopg2-binary>=2.9.12",
     "python-dotenv>=1.2.2",
     "python-jobspy==1.1.82",
     "sqlmodel>=0.0.38",

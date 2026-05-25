@@ -7,3 +7,4 @@ cd "$(dirname "$0")"
 ./pipeline title judge
 ./spider enrich
 ./pipeline jd judge
+./pipeline report

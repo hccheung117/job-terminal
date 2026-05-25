@@ -1,4 +1,3 @@
-import os
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,7 +16,6 @@ from paths import PROMPTS_DIR
 from steps.judge_title import STEP as TITLE_JUDGE_STEP
 
 STEP = "jd_judge"
-MODEL = os.environ["SMALL_MODEL"]
 
 PROMPT_TEMPLATE = (PROMPTS_DIR / "judge_jd.md").read_text(encoding="utf-8")
 
@@ -120,7 +118,7 @@ def plan_judge_jd(engine: Engine) -> list[JudgeJdPlan]:
 
 def _default_judge(plan: JudgeJdPlan) -> JdVerdict:
     prompt = PROMPT_TEMPLATE.format(criteria=plan.criteria, title=plan.title, jd=plan.jd)
-    return llm.judge(llm.openai(MODEL), prompt, JdVerdict)
+    return llm.judge(llm.small(), prompt, JdVerdict)
 
 
 def execute_judge_jd_plan(

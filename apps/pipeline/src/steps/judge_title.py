@@ -1,4 +1,3 @@
-import os
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,7 +16,6 @@ from paths import PROMPTS_DIR
 from steps.filter_title import STEP as TITLE_FILTER_STEP
 
 STEP = "title_judge"
-MODEL = os.environ["SMALL_MODEL"]
 
 PROMPT_TEMPLATE = (PROMPTS_DIR / "judge_title.md").read_text(encoding="utf-8")
 
@@ -117,7 +115,7 @@ def plan_judge_title(engine: Engine) -> list[JudgeTitlePlan]:
 
 def _default_judge(plan: JudgeTitlePlan) -> TitleVerdict:
     prompt = PROMPT_TEMPLATE.format(criteria=plan.criteria, title=plan.title)
-    return llm.judge(llm.openai(MODEL), prompt, TitleVerdict)
+    return llm.judge(llm.small(), prompt, TitleVerdict)
 
 
 def execute_judge_title_plan(

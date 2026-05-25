@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
@@ -11,7 +10,6 @@ import llm
 from paths import PROMPTS_DIR
 from steps.report import ReportInsightInput, UserReport
 
-MODEL = os.environ["SMALL_MODEL"]
 PROMPT_TEMPLATE = (PROMPTS_DIR / "report_insight.md").read_text(encoding="utf-8")
 
 InsightJudge = Callable[[ReportInsightInput], str]
@@ -58,7 +56,7 @@ def _default_judge(inp: ReportInsightInput) -> str:
         criteria=inp.criteria or "(none)",
         funnel_block=_format_funnel_block(inp),
     )
-    msg = llm.openai(MODEL).invoke(prompt)
+    msg = llm.small().invoke(prompt)
     text = getattr(msg, "content", msg)
     if isinstance(text, list):
         text = "".join(

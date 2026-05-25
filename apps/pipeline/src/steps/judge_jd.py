@@ -1,3 +1,4 @@
+import os
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ from paths import PROMPTS_DIR
 from steps.judge_title import STEP as TITLE_JUDGE_STEP
 
 STEP = "jd_judge"
-MODEL = "gemini-3.1-flash-lite:latest"
+MODEL = os.environ["SMALL_MODEL"]
 
 PROMPT_TEMPLATE = (PROMPTS_DIR / "judge_jd.md").read_text(encoding="utf-8")
 

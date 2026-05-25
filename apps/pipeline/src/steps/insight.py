@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
@@ -10,7 +11,7 @@ import llm
 from paths import PROMPTS_DIR
 from steps.report import ReportInsightInput, UserReport
 
-MODEL = "gemini-3.1-flash-lite:latest"
+MODEL = os.environ["SMALL_MODEL"]
 PROMPT_TEMPLATE = (PROMPTS_DIR / "report_insight.md").read_text(encoding="utf-8")
 
 InsightJudge = Callable[[ReportInsightInput], str]
